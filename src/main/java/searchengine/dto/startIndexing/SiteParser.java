@@ -11,6 +11,8 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import searchengine.model.Page;
 import searchengine.model.Site;
+
+import java.io.IOException;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.RecursiveTask;
@@ -82,23 +84,29 @@ public class SiteParser extends RecursiveTask<SiteNode> {
             try {
                 List<SiteParser> taskList = new ArrayList<>();
                 for (String child : childes) {
-                    con = Jsoup.connect(child);
-                    Document document = con.
-                            userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
-                            .referrer("http://www.google.com").ignoreContentType(true).get();
-                    Session session = CreateSession.getSession();
-                    synchronized ((session)) {
+                    URL childURL = new URL(child);
+                    if(childURL.getHost().replaceAll("www\\.", "").equals(host) &&
+                            !child.matches(".*#$") || !child.contains("javascript") &&
+                            child.contains(url.toString()) && !child.equals(url.toString())) {
+                        con = Jsoup.connect(child);
+                        Document document = con.
+                                userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+                                .referrer("http://www.google.com").ignoreContentType(true).get();
+                        Session session = CreateSession.getSession();
                         Transaction transaction = session.beginTransaction();
-                        Page page = new Page();
-                        synchronized (page) {
+                        try {
+                            Page page = new Page();
                             page.setContent(document.html());
                             page.setCode(con.response().statusCode());
                             page.setSite(site);
                             page.setPath(document.location());
                             session.save(page);
+                            transaction.commit();
+                        } catch (Exception e) {
+                            transaction.rollback();
+                        } finally {
+                            session.close();
                         }
-                        transaction.commit();
-                        session.close();
                     }
                     SiteParser task = new SiteParser(new URL(child), site);
                     task.fork();
@@ -115,7 +123,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
         }
     }
 
-    private void childListAdd(Set<String> childes, String child) {
+    private void childListAdd(Set<String> childes, String child) throws IOException {
         Optional<String> isChild = childes.stream().filter(child::contains).findFirst();
         if (isChild.isEmpty()) {
             try {
@@ -130,6 +138,25 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                 childes.removeIf(c -> c.contains(child));
             }
             childes.add(child);
+//            Connection con = Jsoup.connect(child);
+//            Document document =
+//                    con.userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+//                            .referrer("http://www.google.com").ignoreContentType(true).get();
+//            Session session = CreateSession.getSession();
+//            Transaction transaction = session.beginTransaction();
+//            try {
+//                Page page = new Page();
+//                page.setContent(document.html());
+//                page.setCode(con.response().statusCode());
+//                page.setSite(site);
+//                page.setPath(document.location());
+//                session.save(page);
+//                transaction.commit();
+//            } catch (Exception e) {
+//                transaction.rollback();
+//            } finally {
+//                session.close();
+//            }
         }
     }
 }
