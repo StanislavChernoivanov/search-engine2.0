@@ -6,7 +6,7 @@ public interface StartIndexingService {
 
     void deleteData();
 
-    StartIndexingResponse startIndexing();
+    StartIndexingResponse startIndexing() throws InterruptedException;
 
     StartIndexingResponse stopIndexing();
 }

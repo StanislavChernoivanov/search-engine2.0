@@ -18,9 +18,10 @@ public class Page {
     private int id;
     @ManyToOne(cascade = CascadeType.ALL)
     private Site site;
+
     private String path;
     private int code;
-    @Column(columnDefinition = "MEDIUMTEXT")
+    @Column(columnDefinition = "MEDIUMTEXT", nullable = false)
     private String content;
     @ManyToMany(cascade = CascadeType.ALL)
     @JoinTable(name = "Indexes",

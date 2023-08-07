@@ -1,34 +1,31 @@
 package searchengine.services;
 import lombok.RequiredArgsConstructor;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
-import searchengine.dto.startIndexing.CreateSession;
 import searchengine.dto.startIndexing.PageIndexingThread;
 import searchengine.dto.startIndexing.StartIndexingResponse;
 import searchengine.model.EnumStatus;
-import searchengine.model.PageRepository;
 import searchengine.model.SiteRepository;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.List;
+import java.util.concurrent.*;
 
 @Service
 @RequiredArgsConstructor
 public class StartIndexingServiceImpl implements StartIndexingService {
-
-    private final PageRepository pageRepository;
-
     private final SiteRepository siteRepository;
 
     private StartIndexingResponse startIndexingResponse;
 
-    private Logger logger = LogManager.getRootLogger();
     private final SitesList sites;
     private static List<Site> siteList = new ArrayList<>();
-    private static Map<Thread, searchengine.model.Site> threadMap = new HashMap<>();
-
+    private static Map<Future<String>, searchengine.model.Site> FUTURES_MAP = new ConcurrentHashMap<>();
+    private static Set<Future<String>> keySet = new HashSet<>();
+    private static ExecutorService service;
 
     @Override
     public void deleteData()
@@ -37,79 +34,74 @@ public class StartIndexingServiceImpl implements StartIndexingService {
     }
 
     @Override
-    public StartIndexingResponse startIndexing()
-    {
+    public StartIndexingResponse startIndexing() {
         startIndexingResponse = new StartIndexingResponse();
-        do {
-            if (siteList.isEmpty()) {
-                siteList = sites.getSites();
-                for (int i = 0; i < siteList.size(); i++) {
-                    searchengine.model.Site site = new searchengine.model.Site();
-                    site.setName(siteList.get(i).getName());
-                    site.setUrl(siteList.get(i).getUrl());
-                    site.setStatus(EnumStatus.INDEXING);
-                    site.setStatusTime(LocalDateTime.now());
-                    site.setLastError("");
-                    siteRepository.save(site);
-                    PageIndexingThread pageIndexingThread = new PageIndexingThread(site.getUrl(), site);
-                    pageIndexingThread.start();
-                    threadMap.put(pageIndexingThread, site);
+        try {
+            do {
+                if (siteList.isEmpty()) {
+                    siteList = sites.getSites();
+                    service = Executors.newFixedThreadPool(siteList.size());
+                    siteList.forEach(s -> {
+                        searchengine.model.Site site = new searchengine.model.Site();
+                        site.setName(s.getName());
+                        site.setUrl(s.getUrl());
+                        site.setStatus(EnumStatus.INDEXING);
+                        site.setStatusTime(LocalDateTime.now());
+                        site.setLastError("");
+                        siteRepository.save(site);
+                        PageIndexingThread pageIndexingThread = new PageIndexingThread(site.getUrl(), site);
+                        Future<String> future = service.submit(pageIndexingThread);
+                        FUTURES_MAP.put(future, site);
+                    });
                 }
-            }
                 indexingSiteCompletedOrInterrupted();
-            startIndexingResponse.setResult(false);
-            startIndexingResponse.setError("Индексация уже запущена");
-        } while (!isIndexed());
-        startIndexingResponse.setError("");
-        startIndexingResponse.setResult(true);
-        return startIndexingResponse;
-    }
-
-    private void indexingSiteCompletedOrInterrupted() {
-        Set<Thread> keySet = threadMap.keySet();
-        for(Thread thread : keySet) {
-            if(!thread.isAlive() && !thread.isInterrupted() &&
-                    threadMap.get(thread).getStatus().equals(EnumStatus.INDEXING)) {
-                threadMap.get(thread).setStatusTime(LocalDateTime.now());
-                threadMap.get(thread).setStatus(EnumStatus.INDEXED);
-                siteRepository.save(threadMap.get(thread));
-//                logger.info("Сайт " + threadMap.get(thread).getName() + " проиндексирован");
-            } else if (thread.isInterrupted()) {
-                threadMap.get(thread).setStatus(EnumStatus.FAILED);
-                threadMap.get(thread).setStatusTime(LocalDateTime.now());
-                threadMap.get(thread).setLastError("Индексация прервана");
-                siteRepository.save(threadMap.get(thread));
-                logger.info("Индексация сайта " + threadMap.get(thread).getName() + " прервана");
-            } else {
-                threadMap.get(thread).setStatusTime(LocalDateTime.now());
-                threadMap.get(thread).setStatus(EnumStatus.INDEXING);
-                siteRepository.save(threadMap.get(thread));
-            }
+                startIndexingResponse.setResult(false);
+                startIndexingResponse.setError("Индексация уже запущена");
+            } while (!isIndexed());
+            startIndexingResponse.setError("");
+            startIndexingResponse.setResult(true);
+        } catch (InterruptedException ex) {
+            ex.printStackTrace();
+        } finally {
+            return startIndexingResponse;
         }
     }
 
-
+    private void indexingSiteCompletedOrInterrupted() throws InterruptedException {
+        keySet = FUTURES_MAP.keySet();
+        for (Future<String> f : keySet) {
+            searchengine.model.Site site =
+                    siteRepository.findById(FUTURES_MAP.get(f).getId()).get();
+            if (!f.isCancelled() && !f.isDone()) {
+                Thread.sleep(3000);
+                site.setStatusTime(LocalDateTime.now());
+                site.setStatus(EnumStatus.INDEXING);
+                siteRepository.save(site);
+            } else if (f.isCancelled()) {
+                site.setStatusTime(LocalDateTime.now());
+                site.setStatus(EnumStatus.FAILED);
+                site.setLastError("Индексация прервана");
+                siteRepository.save(site);
+            } else if (f.isDone() && FUTURES_MAP.get(f).getStatus().equals(EnumStatus.INDEXING)) {
+                site.setStatusTime(LocalDateTime.now());
+                site.setStatus(EnumStatus.INDEXED);
+                siteRepository.save(site);
+            }
+        }
+    }
     private boolean isIndexed() {
         int i = 0;
-        if(!siteList.isEmpty()) {
-            Iterable<searchengine.model.Site> iterable = siteRepository.findAll();
-            for (searchengine.model.Site site : iterable) {
-                boolean isIndexed = site.getStatus().equals(EnumStatus.INDEXED) ? true : false;
-                if(isIndexed) i++;
-            }
-            if(i == siteList.size()) return true;
-        }
-        return false;
+        for(Future<String> future : keySet)  if (future.isDone() || future.isCancelled()) i++;
+        return i == siteList.size();
     }
 
     @Override
     public StartIndexingResponse stopIndexing() {
         int countAliveThreads = 0;
-        Set<Thread> keySet = threadMap.keySet();
         if (!keySet.isEmpty()) {
-            for(Thread t : keySet) {
-                if(t.isAlive()) {
-                    t.interrupt();
+            for(Future<String> f : keySet) {
+                if(!f.isCancelled() && !f.isDone()) {
+                    f.cancel(true);
                     countAliveThreads++;
                 }
             }

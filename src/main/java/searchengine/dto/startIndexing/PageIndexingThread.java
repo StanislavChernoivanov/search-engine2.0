@@ -1,13 +1,13 @@
 package searchengine.dto.startIndexing;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+
 import searchengine.model.Site;
 
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinPool;
-public class PageIndexingThread extends Thread {
+public class PageIndexingThread implements Callable<String> {
     private final String url;
-    public static final Logger LOGGER = LogManager.getLogger(PageIndexingThread.class);
     private Site site;
 
     public PageIndexingThread(String url , Site site) {
@@ -16,13 +16,14 @@ public class PageIndexingThread extends Thread {
     }
 
     @Override
-    public void run() {
+    public String call() {
+        SiteParser parser;
         try {
-            SiteParser parser = new SiteParser(new URL(url), site);
-            SiteNode main = new ForkJoinPool().invoke(parser);
-            LOGGER.info(System.lineSeparator() + main);
-        } catch (Exception exception) {
-            LOGGER.error("{}: {}", exception.getMessage(), exception.getStackTrace());
+            parser = new SiteParser(new URL(url), site);
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
         }
+        SiteNode main = new ForkJoinPool().invoke(parser);
+            return (System.lineSeparator() + main);
     }
 }

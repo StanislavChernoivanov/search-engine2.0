@@ -19,12 +19,12 @@ public class ApiController {
         this.startIndexingService = startIndexingService;
     }
     @GetMapping("/startIndexing")
-    public ResponseEntity<StartIndexingResponse> startIndexing() {
+    public ResponseEntity<StartIndexingResponse> startIndexing() throws InterruptedException {
         return ResponseEntity.ok(startIndexingService.startIndexing());
     }
     @GetMapping("/stopIndexing")
     public ResponseEntity<StartIndexingResponse> stopIndexing() {
-        return ResponseEntity.ok(startIndexingService.startIndexing());
+        return ResponseEntity.ok(startIndexingService.stopIndexing());
     }
 
     @GetMapping("/statistics")
