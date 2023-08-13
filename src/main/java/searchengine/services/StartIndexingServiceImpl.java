@@ -1,8 +1,6 @@
 package searchengine.services;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.dto.startIndexing.PageIndexingThread;
@@ -23,7 +21,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
 
     private final SitesList sites;
     private static List<Site> siteList = new ArrayList<>();
-    private static Map<Future<String>, searchengine.model.Site> FUTURES_MAP = new ConcurrentHashMap<>();
+    private static final Map<Future<String>, searchengine.model.Site> FUTURES_MAP = new ConcurrentHashMap<>();
     private static Set<Future<String>> keySet = new HashSet<>();
     private static ExecutorService service;
 
@@ -62,30 +60,36 @@ public class StartIndexingServiceImpl implements StartIndexingService {
             startIndexingResponse.setResult(true);
         } catch (InterruptedException ex) {
             ex.printStackTrace();
-        } finally {
-            return startIndexingResponse;
-        }
+        } return startIndexingResponse;
+
     }
 
     private void indexingSiteCompletedOrInterrupted() throws InterruptedException {
         keySet = FUTURES_MAP.keySet();
         for (Future<String> f : keySet) {
-            searchengine.model.Site site =
-                    siteRepository.findById(FUTURES_MAP.get(f).getId()).get();
-            if (!f.isCancelled() && !f.isDone()) {
-                Thread.sleep(3000);
-                site.setStatusTime(LocalDateTime.now());
-                site.setStatus(EnumStatus.INDEXING);
-                siteRepository.save(site);
-            } else if (f.isCancelled()) {
-                site.setStatusTime(LocalDateTime.now());
-                site.setStatus(EnumStatus.FAILED);
-                site.setLastError("Индексация прервана");
-                siteRepository.save(site);
-            } else if (f.isDone() && FUTURES_MAP.get(f).getStatus().equals(EnumStatus.INDEXING)) {
-                site.setStatusTime(LocalDateTime.now());
-                site.setStatus(EnumStatus.INDEXED);
-                siteRepository.save(site);
+            Optional optional = siteRepository.findById(FUTURES_MAP.get(f).getId());
+            if(optional.isPresent()) {
+                searchengine.model.Site site = (searchengine.model.Site) optional.get();
+                if (!f.isCancelled() && !f.isDone()) {
+                    Thread.sleep(3000);
+                    site.setStatusTime(LocalDateTime.now());
+                    site.setStatus(EnumStatus.INDEXING);
+                    siteRepository.save(site);
+                } else if (f.isCancelled()) {
+                    site.setStatusTime(LocalDateTime.now());
+                    site.setStatus(EnumStatus.FAILED);
+                    site.setLastError("Индексация прервана");
+                    siteRepository.save(site);
+                } else if (f.isDone() && FUTURES_MAP.get(f).getStatus().equals(EnumStatus.INDEXING)) {
+                    site.setStatusTime(LocalDateTime.now());
+                    site.setStatus(EnumStatus.INDEXED);
+                    siteRepository.save(site);
+                    try {
+                        System.out.println(f.get());
+                    } catch (ExecutionException ex) {
+                        ex.printStackTrace();
+                    }
+                }
             }
         }
     }

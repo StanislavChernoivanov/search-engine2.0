@@ -25,7 +25,7 @@ public class CreateSession {
             return sessionFactory.openSession();
     }
 
-    static synchronized boolean urlIsPresent(String path) {
+    static synchronized boolean urlIsUnique(String path) {
          Session session = sessionFactory.openSession();
          List<Page> resultList = new ArrayList<>();
         Transaction transaction = session.beginTransaction();

@@ -13,6 +13,7 @@ import java.util.List;
 @Getter
 @Setter
 public class Page {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
@@ -28,4 +29,5 @@ public class Page {
             joinColumns = {@JoinColumn(name = "page_id")},
             inverseJoinColumns = {@JoinColumn(name = "lemma_id")})
     private List<Lemma> lemmaList;
+
 }

@@ -18,15 +18,11 @@ import java.util.concurrent.RecursiveTask;
 public class SiteParser extends RecursiveTask<SiteNode> {
 
     private static final Logger LOGGER = LogManager.getLogger(SiteParser.class);
-//    private static Set<String> uniqueUrls = new HashSet<>();
-
-    private Site site;
+    private final Site site;
 
     @Getter
     private final URL url;
     private final String host;
-//    @Getter
-//    private SiteNode mainNode;
 
     public SiteParser(URL url, Site site) {
         this.url = url;
@@ -35,24 +31,45 @@ public class SiteParser extends RecursiveTask<SiteNode> {
     }
 
     private Set<String> getChildes(URL parent) {
+        String path = "";
         Set<String> childes = new TreeSet<>();
         Connection connection = Jsoup.connect(parent.toString());
         try {
             Document doc = connection.
                     userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
                     .referrer("http://www.google.com").ignoreContentType(true).get();
-            Thread.sleep((long) Math.random() * (300 - 150) + 150);
+            Thread.sleep((long) (Math.random() * (300 - 150)) + 150);
             Elements elements = doc.select("a[href]");
             for (Element element : elements) {
                 String attr = element.attr("abs:href");
-                if (attr.matches(".*#$") || attr.contains("javascript") ||
-                        !attr.contains(url.toString()) || attr.equals(url.toString())) {
-                    continue;
+                if (attr.contains("http") || attr.contains("https")) {
+                    URL attrUrl = new URL(attr);
+                    if (!attrUrl.getHost().replaceAll("www\\.", "").equals(host) ||
+                            attr.matches(".*#$") || attr.contains("javascript") ||
+                            !attr.contains(url.toString()) || attr.equals(url.toString()) ||
+                            attrUrl.getPath().equals("/") ||
+                            !CreateSession.urlIsUnique(new URL(attr).getPath())) continue;
+                    Session session = CreateSession.getSession();
+                    Transaction transaction = session.beginTransaction();
+                    try{
+                        Page page = new Page();
+                        page.setCode(connection.response().statusCode());
+                        page.setContent(doc.html());
+                        page.setSite(site);
+                        page.setPath(attrUrl.getPath());
+                        session.save(page);
+                        transaction.commit();
+                    } catch (Exception e) {
+                        transaction.rollback();
+                    } finally {
+                        session.close();
+                    }
+                    childListAdd(childes, attr);
+                    path = attr;
                 }
-                childListAdd(childes, attr);
             }
         } catch (Exception e) {
-            LOGGER.error("{}\n{}", e.getMessage(), e.getStackTrace());
+            LOGGER.error("{} \n {} \n{}",path, e.getMessage(), e.getStackTrace());
         }
         return childes;
     }
@@ -60,7 +77,6 @@ public class SiteParser extends RecursiveTask<SiteNode> {
     @Override
     protected SiteNode compute() {
         Set<String> childes = getChildes(url);
-        Connection con;
         if (childes.size() == 0) {
             return new SiteNode(url);
         } else {
@@ -69,34 +85,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                 List<SiteParser> taskList = new ArrayList<>();
                 for (String child : childes) {
                     URL childURL = new URL(child);
-                    if(childURL.getHost().replaceAll("www\\.", "").equals(host) &&
-                            !child.matches(".*#$") && !child.contains("javascript") &&
-                            child.contains(url.toString()) && !child.equals(url.toString())
-                             && !childURL.getPath().equals("/") &&
-                    CreateSession.urlIsPresent(new URL(child).getPath())) {
-                        con = Jsoup.connect(child);
-                        Document document = con.
-                                userAgent("Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:25.0) Gecko/20100101 Firefox/25.0")
-                                .referrer("http://www.google.com").ignoreContentType(true).get();
-                        Thread.sleep((long) Math.random() * (300 - 150) + 150);
-                        Session session = CreateSession.getSession();
-                        Transaction transaction = session.beginTransaction();
-                        try {
-                            Page page = new Page();
-                            page.setCode(con.response().statusCode());
-                            if(con.response().statusCode() == 200) page.setContent(document.html());
-                             else page.setContent(con.response().body());
-                            page.setSite(site);
-                            page.setPath(new URL(child).getPath());
-                            session.save(page);
-                            transaction.commit();
-                        } catch (Exception e) {
-                            transaction.rollback();
-                        } finally {
-                            session.close();
-                        }
-                    }
-                    SiteParser task = new SiteParser(new URL(child), site);
+                    SiteParser task = new SiteParser(childURL, site);
                     task.fork();
                     taskList.add(task);
                 }
@@ -127,6 +116,5 @@ public class SiteParser extends RecursiveTask<SiteNode> {
             }
             childes.add(child);
         }
-
     }
 }
