@@ -20,9 +20,10 @@
         <property name="show_sql">false</property>
         <property name="hbm2ddl.auto">update</property>
 
-        <mapping class="searchengine.model.Page"></mapping>
-        <mapping class="searchengine.model.Site"></mapping>
-        <mapping class="searchengine.model.Lemma"></mapping>
+        <mapping class="searchengine.model.entities.Page"></mapping>
+        <mapping class="searchengine.model.entities.Site"></mapping>
+        <mapping class="searchengine.model.entities.Lemma"></mapping>
+        <mapping class="searchengine.model.entities.Indexes"></mapping>
 
 
     </session-factory>

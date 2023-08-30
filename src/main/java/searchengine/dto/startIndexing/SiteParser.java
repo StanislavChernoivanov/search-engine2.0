@@ -9,8 +9,8 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import searchengine.model.Page;
-import searchengine.model.Site;
+import searchengine.model.entities.Page;
+import searchengine.model.entities.Site;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.RecursiveTask;
@@ -38,7 +38,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
             Document doc = connection.
                     userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
                     .referrer("http://www.google.com").ignoreContentType(true).get();
-            Thread.sleep((long) (Math.random() * (300 - 150)) + 150);
+            Thread.sleep((long) (Math.random() * 700) + 800);
             Elements elements = doc.select("a[href]");
             for (Element element : elements) {
                 String attr = element.attr("abs:href");

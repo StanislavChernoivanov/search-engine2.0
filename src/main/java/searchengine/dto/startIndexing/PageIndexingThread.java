@@ -1,6 +1,6 @@
 package searchengine.dto.startIndexing;
 
-import searchengine.model.Site;
+import searchengine.model.entities.Site;
 
 import java.net.MalformedURLException;
 import java.net.URL;

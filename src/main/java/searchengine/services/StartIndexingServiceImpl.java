@@ -5,8 +5,8 @@ import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.dto.startIndexing.PageIndexingThread;
 import searchengine.dto.startIndexing.StartIndexingResponse;
-import searchengine.model.EnumStatus;
-import searchengine.model.SiteRepository;
+import searchengine.model.entities.EnumStatus;
+import searchengine.model.repositories.SiteRepository;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.List;
@@ -21,9 +21,11 @@ public class StartIndexingServiceImpl implements StartIndexingService {
 
     private final SitesList sites;
     private static List<Site> siteList = new ArrayList<>();
-    private static final Map<Future<String>, searchengine.model.Site> FUTURES_MAP = new ConcurrentHashMap<>();
+    private static final Map<Future<String>, searchengine.model.entities.Site> FUTURES_MAP = new ConcurrentHashMap<>();
     private static Set<Future<String>> keySet = new HashSet<>();
     private static ExecutorService service;
+
+    private static int indexedAmount = 0;
 
     @Override
     public void deleteData()
@@ -40,7 +42,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
                     siteList = sites.getSites();
                     service = Executors.newFixedThreadPool(siteList.size());
                     siteList.forEach(s -> {
-                        searchengine.model.Site site = new searchengine.model.Site();
+                        searchengine.model.entities.Site site = new searchengine.model.entities.Site();
                         site.setName(s.getName());
                         site.setUrl(s.getUrl());
                         site.setStatus(EnumStatus.INDEXING);
@@ -52,24 +54,25 @@ public class StartIndexingServiceImpl implements StartIndexingService {
                         FUTURES_MAP.put(future, site);
                     });
                 }
-                indexingSiteCompletedOrInterrupted();
+            } while (!indexingSiteCompletedOrInterrupted());
+            if(indexingSiteCompletedOrInterrupted()) {
+                startIndexingResponse.setError("");
+                startIndexingResponse.setResult(true);
+            } else {
                 startIndexingResponse.setResult(false);
                 startIndexingResponse.setError("Индексация уже запущена");
-            } while (!isIndexed());
-            startIndexingResponse.setError("");
-            startIndexingResponse.setResult(true);
+            }
         } catch (InterruptedException ex) {
             ex.printStackTrace();
         } return startIndexingResponse;
-
     }
 
-    private void indexingSiteCompletedOrInterrupted() throws InterruptedException {
+    private boolean indexingSiteCompletedOrInterrupted() throws InterruptedException {
         keySet = FUTURES_MAP.keySet();
         for (Future<String> f : keySet) {
-            Optional optional = siteRepository.findById(FUTURES_MAP.get(f).getId());
+            Optional<searchengine.model.entities.Site> optional = siteRepository.findById(FUTURES_MAP.get(f).getId());
             if(optional.isPresent()) {
-                searchengine.model.Site site = (searchengine.model.Site) optional.get();
+                searchengine.model.entities.Site site = optional.get();
                 if (!f.isCancelled() && !f.isDone()) {
                     Thread.sleep(3000);
                     site.setStatusTime(LocalDateTime.now());
@@ -84,6 +87,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
                     site.setStatusTime(LocalDateTime.now());
                     site.setStatus(EnumStatus.INDEXED);
                     siteRepository.save(site);
+                    indexedAmount++;
                     try {
                         System.out.println(f.get());
                     } catch (ExecutionException ex) {
@@ -92,11 +96,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
                 }
             }
         }
-    }
-    private boolean isIndexed() {
-        int i = 0;
-        for(Future<String> future : keySet)  if (future.isDone() || future.isCancelled()) i++;
-        return i == siteList.size();
+        return indexedAmount == siteList.size();
     }
 
     @Override
@@ -104,7 +104,13 @@ public class StartIndexingServiceImpl implements StartIndexingService {
         int countAliveThreads = 0;
         if (!keySet.isEmpty()) {
             for(Future<String> f : keySet) {
-                if(!f.isCancelled() && !f.isDone()) {
+                Optional<searchengine.model.entities.Site> optional = siteRepository.findById(FUTURES_MAP.get(f).getId());
+                if(optional.isPresent() && !f.isCancelled() && !f.isDone()) {
+                    searchengine.model.entities.Site site = optional.get();
+                    site.setStatusTime(LocalDateTime.now());
+                    site.setStatus(EnumStatus.FAILED);
+                    site.setLastError("Индексация прервана пользователем");
+                    siteRepository.save(site);
                     f.cancel(true);
                     countAliveThreads++;
                 }
