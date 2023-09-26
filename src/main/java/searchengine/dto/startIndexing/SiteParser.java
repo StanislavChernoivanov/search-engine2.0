@@ -9,6 +9,9 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import searchengine.dto.indexPage.LemmaFinder;
+import searchengine.model.entities.Indexes;
+import searchengine.model.entities.Lemma;
 import searchengine.model.entities.Page;
 import searchengine.model.entities.Site;
 import java.net.URL;
@@ -24,6 +27,8 @@ public class SiteParser extends RecursiveTask<SiteNode> {
     private final URL url;
     private final String host;
 
+
+
     public SiteParser(URL url, Site site) {
         this.url = url;
         this.site = site;
@@ -38,8 +43,9 @@ public class SiteParser extends RecursiveTask<SiteNode> {
             Document doc = connection.
                     userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
                     .referrer("http://www.google.com").ignoreContentType(true).get();
-            Thread.sleep((long) (Math.random() * 700) + 800);
+            Thread.sleep((long) (Math.random() * 500) + 300);
             Elements elements = doc.select("a[href]");
+            Session session = CreateSession.getSession();
             for (Element element : elements) {
                 String attr = element.attr("abs:href");
                 if (attr.contains("http") || attr.contains("https")) {
@@ -48,9 +54,12 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                             attr.matches(".*#$") || attr.contains("javascript") ||
                             !attr.contains(url.toString()) || attr.equals(url.toString()) ||
                             attrUrl.getPath().equals("/") ||
-                            !CreateSession.urlIsUnique(new URL(attr).getPath())) continue;
-                    Session session = CreateSession.getSession();
-                    Transaction transaction = session.beginTransaction();
+                            !CreateSession.urlIsUnique(new URL(attr).getPath(), session)) {
+                        continue;
+                    }
+                    LemmaFinder finder = new LemmaFinder();
+                    Map<String, Integer> lemmas = finder.collectLemmas(doc.text());
+                    Transaction t = session.beginTransaction();
                     try{
                         Page page = new Page();
                         page.setCode(connection.response().statusCode());
@@ -58,26 +67,105 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                         page.setSite(site);
                         page.setPath(attrUrl.getPath());
                         session.save(page);
-                        transaction.commit();
+                        t.commit();
+                        Set<String> keySet = lemmas.keySet();
+                        for (String key : keySet) {
+                            if(!CreateSession.lemmaIsExist(key, session)) {
+                                t.begin();
+                                Lemma lemma = new Lemma();
+                                lemma.setSite(site);
+                                lemma.setLemma(key);
+                                lemma.setFrequency(1);
+                                session.save(lemma);
+                                Indexes index = new Indexes();
+                                index.setPage(page);
+                                index.setLemma(lemma);
+                                index.setRank(lemmas.get(key));
+                                session.save(index);
+                                t.commit();
+                            } else if (!CreateSession.indexIsExist(CreateSession.
+                                    findLemma(key, session).getId(), page.getId())) {
+                                t.begin();
+                                Lemma lemma = CreateSession.findLemma(key, session);
+                                lemma.setFrequency(lemma.getFrequency() + 1);
+                                session.update(lemma);
+                                Indexes index = new Indexes();
+                                index.setPage(page);
+                                index.setLemma(lemma);
+                                index.setRank(lemmas.get(key));
+                                session.save(index);
+                                t.commit();
+                            } else {
+                                t.begin();
+                                Lemma lemma = CreateSession.findLemma(key,session);
+                                lemma.setFrequency(lemma.getFrequency() + 1);
+                                session.update(lemma);
+                                t.commit();
+                            }
+                        }
                     } catch (Exception e) {
-                        transaction.rollback();
-                    } finally {
-                        session.close();
+                        t.rollback();
+//                        e.printStackTrace();
                     }
                     childListAdd(childes, attr);
                     path = attr;
                 }
             }
+            session.close();
         } catch (Exception e) {
             LOGGER.error("{} \n {} \n{}",path, e.getMessage(), e.getStackTrace());
         }
         return childes;
     }
 
+//    private void addLemmaAndIndexIntoDB(String pathPage, Session session,
+//                                        Map<String, Integer> lemmas) throws InterruptedException {
+//        Set<String> keySet = lemmas.keySet();
+//        Page page = CreateSession.getPageOnPath(pathPage, session);
+//        for (String key : keySet) {
+//            Lemma lemma;
+//            Indexes index = new Indexes();
+//            if(!CreateSession.lemmaIsExist(key)) {
+//                Transaction t = session.beginTransaction();
+//                lemma = new Lemma();
+//                lemma.setSite(site);
+//                lemma.setLemma(key);
+//                lemma.setFrequency(1);
+//                session.save(lemma);
+//                t.commit();
+//                t = session.beginTransaction();
+//                index.setPage(page);
+//                index.setLemma(lemma);
+//                index.setRank(lemmas.get(key));
+//                session.save(index);
+//                t.commit();
+//            } else if (!CreateSession.indexIsExist(CreateSession.
+//                    findLemma(key).getId(), page.getId())) {
+//                Transaction t = session.beginTransaction();
+//                lemma = CreateSession.findLemma(key);
+//                lemma.setFrequency(lemma.getFrequency() + 1);
+//                session.update(lemma);
+//                t.commit();
+//                t = session.beginTransaction();
+//                index.setPage(page);
+//                index.setLemma(lemma);
+//                index.setRank(lemmas.get(key));
+//                session.save(index);
+//                t.commit();
+//            } else {
+//                Transaction t = session.beginTransaction();
+//                lemma = CreateSession.findLemma(key);
+//                lemma.setFrequency(lemma.getFrequency() + 1);
+//                session.update(lemma);
+//                t.commit();
+//            }
+//        }
+//    }
+
     @Override
     protected SiteNode compute() {
         Set<String> childes = getChildes(url);
-        if (childes.size() == 0) {
+        if (childes.isEmpty()) {
             return new SiteNode(url);
         } else {
             SiteNode node = new SiteNode(url);
@@ -111,7 +199,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
             } catch (Exception exception) {
                 LOGGER.error("{} \n {} \n{}",child, exception.getMessage(), exception.getStackTrace());
             }
-            if (childes.size() > 0) {
+            if (!childes.isEmpty()) {
                 childes.removeIf(c -> c.contains(child));
             }
             childes.add(child);

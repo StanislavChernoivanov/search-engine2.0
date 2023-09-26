@@ -1,6 +1,8 @@
 package searchengine.model.entities;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.Cascade;
+
 import javax.persistence.*;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -8,7 +10,10 @@ import java.util.List;
 
 
 @Entity
-@Table(name = "lemmas")
+@Table(name = "lemmas",
+        indexes = @Index(name = "l_index",
+                columnList = "lemma",
+                unique = true))
 @Getter
 @Setter
 public class Lemma implements Serializable {
@@ -25,11 +30,4 @@ public class Lemma implements Serializable {
 //    @OneToMany(mappedBy = "lemmas", cascade = CascadeType.ALL)
 //    private List<Indexes> indexesList = new ArrayList<>();
 
-    public Lemma(Site site, String lemma, int frequency) {
-        this.site = site;
-        this.lemma = lemma;
-        this.frequency = frequency;
-    }
-
-    public Lemma() {}
 }

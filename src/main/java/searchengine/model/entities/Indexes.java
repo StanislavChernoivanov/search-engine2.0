@@ -7,7 +7,8 @@ import javax.persistence.*;
 import java.io.Serializable;
 
 @Entity
-@Table(name = "indexes")
+@Table(name = "indexes", uniqueConstraints =
+        @UniqueConstraint(name = "unique_ident", columnNames = {"lemma_id, page_id"}))
 @Getter
 @Setter
 public class Indexes implements Serializable {
@@ -15,18 +16,12 @@ public class Indexes implements Serializable {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
     @ManyToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JoinColumn(foreignKey=@ForeignKey(name = "FK_index_page"))
+    @JoinColumn(foreignKey=@ForeignKey(name = "FK_index_page"), name = "page_id")
     private Page page;
     @ManyToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    @JoinColumn(foreignKey=@ForeignKey(name = "FK_index_lemma"))
+    @JoinColumn(foreignKey=@ForeignKey(name = "FK_index_lemma"), name = "lemma_id")
     private Lemma lemma;
+    @Column(name = "ranks")
     private float rank;
 
-    public Indexes(Page page, Lemma lemma, float rank) {
-        this.page = page;
-        this.lemma = lemma;
-        this.rank = rank;
-    }
-
-    public Indexes() {}
 }

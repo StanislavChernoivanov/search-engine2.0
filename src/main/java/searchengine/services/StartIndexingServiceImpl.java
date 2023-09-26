@@ -28,12 +28,6 @@ public class StartIndexingServiceImpl implements StartIndexingService {
     private static int indexedAmount = 0;
 
     @Override
-    public void deleteData()
-    {
-        siteRepository.deleteAll();
-    }
-
-    @Override
     public StartIndexingResponse startIndexing() {
         startIndexingResponse = new StartIndexingResponse();
         try {

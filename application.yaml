@@ -11,7 +11,7 @@ indexing-settings:
 spring:
   datasource:
     username: root
-    password: 12345678Sgt!
+    password: 2664153Hgt!
     url:
       jdbc:mysql://localhost:3306/search_engine?useSSL=false&requir
       eSSL=false&allowPublicKeyRetrieval=true
@@ -20,5 +20,5 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MariaDBDialect
     hibernate:
-      ddl-auto: create-drop
-    show-sql: true
+      ddl-auto: create
+    show-sql: false

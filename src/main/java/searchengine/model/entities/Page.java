@@ -33,19 +33,4 @@ public class Page implements Serializable {
 //    @OneToMany(mappedBy = "pages", cascade = CascadeType.ALL)
 //    private List<Indexes> indexList = new ArrayList<>();
 
-//    @ManyToMany(cascade = CascadeType.ALL)
-//    @JoinTable(name = "Indexes",
-//            joinColumns = {@JoinColumn(name = "page_id")},
-//            inverseJoinColumns = {@JoinColumn(name = "lemma_id")})
-//    private List<Lemma> lemmaList;
-
-
-    public Page(Site site, String path, int code, String content) {
-        this.site = site;
-        this.path = path;
-        this.code = code;
-        this.content = content;
-    }
-
-    public Page () {}
 }
