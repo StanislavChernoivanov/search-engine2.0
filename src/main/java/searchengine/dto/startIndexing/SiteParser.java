@@ -58,6 +58,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                         continue;
                     }
                     LemmaFinder finder = new LemmaFinder();
+                    // Получаем мап с леммами
                     Map<String, Integer> lemmas = finder.collectLemmas(doc.text());
                     Transaction t = session.beginTransaction();
                     try{
@@ -68,8 +69,10 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                         page.setPath(attrUrl.getPath());
                         session.save(page);
                         t.commit();
+                        // Из мапы получаем сет и в цикле проводим операции по созданию и обновлению каждой леммы
                         Set<String> keySet = lemmas.keySet();
                         for (String key : keySet) {
+                            // Если лемма не существует создаем лемму и индекс и сохраняем в бд
                             if(!CreateSession.lemmaIsExist(key, session)) {
                                 t.begin();
                                 Lemma lemma = new Lemma();
@@ -85,6 +88,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                                 index.setRank(lemmas.get(key));
                                 session.save(index);
                                 t.commit();
+                                // Если не существует только индекс то у леммы увеличиваем frequency на 1 и создаем индекс
                             } else if (!CreateSession.indexIsExist(CreateSession.
                                     findLemma(key, session).getId(), page.getId())) {
                                 t.begin();
@@ -100,6 +104,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                                 session.save(index);
                                 t.commit();
                             } else {
+                                // Если существует и лемма и индекс то просто увеличиваем частоту на 1
                                 t.begin();
                                 Lemma lemma = CreateSession.findLemma(key,session);
                                 lemma.setFrequency(lemma.getFrequency() + 1);
