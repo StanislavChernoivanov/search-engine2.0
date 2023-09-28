@@ -16,7 +16,7 @@ import java.util.List;
                 unique = true))
 @Getter
 @Setter
-public class Page implements Serializable {
+public class Page {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

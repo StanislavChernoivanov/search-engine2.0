@@ -20,10 +20,6 @@ public class SiteNode implements Comparable<SiteNode> {
             childNodes.add(child);
         }
     }
-    public void addChild(URL url) {
-        SiteNode child = new SiteNode(url);
-        addChild(child);
-    }
 
     @Override
     public String toString() {

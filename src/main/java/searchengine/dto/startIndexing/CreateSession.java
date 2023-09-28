@@ -28,7 +28,7 @@ public class CreateSession {
             return SESSION_FACTORY.openSession();
     }
 
-    static synchronized boolean urlIsUnique(String path, Session session) {
+    static boolean urlIsUnique(String path, Session session) {
          List<Page> resultList;
          CriteriaBuilder builder = session.getCriteriaBuilder();
          CriteriaQuery<Page> query = builder.createQuery(Page.class);

@@ -77,6 +77,8 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                                 lemma.setLemma(key);
                                 lemma.setFrequency(1);
                                 session.save(lemma);
+                                t.commit();
+                                t.begin();
                                 Indexes index = new Indexes();
                                 index.setPage(page);
                                 index.setLemma(lemma);
@@ -89,6 +91,8 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                                 Lemma lemma = CreateSession.findLemma(key, session);
                                 lemma.setFrequency(lemma.getFrequency() + 1);
                                 session.update(lemma);
+                                t.commit();
+                                t.begin();
                                 Indexes index = new Indexes();
                                 index.setPage(page);
                                 index.setLemma(lemma);
@@ -105,7 +109,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                         }
                     } catch (Exception e) {
                         t.rollback();
-//                        e.printStackTrace();
+                        e.printStackTrace();
                     }
                     childListAdd(childes, attr);
                     path = attr;

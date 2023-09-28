@@ -8,10 +8,10 @@ import java.io.Serializable;
 
 @Entity
 @Table(name = "indexes", uniqueConstraints =
-        @UniqueConstraint(name = "unique_ident", columnNames = {"lemma_id, page_id"}))
+        @UniqueConstraint(name = "indexes_ident", columnNames = {"lemma_id", "page_id"}))
 @Getter
 @Setter
-public class Indexes implements Serializable {
+public class Indexes {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;

@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @Table(name = "sites")
 @Getter
 @Setter
-public class Site implements Serializable {
+public class Site {
 
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)

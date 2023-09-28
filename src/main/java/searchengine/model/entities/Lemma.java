@@ -16,7 +16,7 @@ import java.util.List;
                 unique = true))
 @Getter
 @Setter
-public class Lemma implements Serializable {
+public class Lemma {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
