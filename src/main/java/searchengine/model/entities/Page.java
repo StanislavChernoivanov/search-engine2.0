@@ -21,7 +21,7 @@ public class Page {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
-    @ManyToOne(cascade = CascadeType.ALL)
+    @ManyToOne(cascade = CascadeType.PERSIST)
     @JoinColumn(nullable = false, foreignKey = @ForeignKey(name = "FK_site_index"))
     private Site site;
 
@@ -29,6 +29,7 @@ public class Page {
     private int code;
     @Column(columnDefinition = "MEDIUMTEXT", nullable = false)
     private String content;
+
 
 //    @OneToMany(mappedBy = "pages", cascade = CascadeType.ALL)
 //    private List<Indexes> indexList = new ArrayList<>();

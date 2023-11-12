@@ -15,7 +15,7 @@ public class Indexes {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
-    @ManyToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @ManyToOne(cascade = CascadeType.MERGE, fetch = FetchType.LAZY)
     @JoinColumn(foreignKey=@ForeignKey(name = "FK_index_page"), name = "page_id")
     private Page page;
     @ManyToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)

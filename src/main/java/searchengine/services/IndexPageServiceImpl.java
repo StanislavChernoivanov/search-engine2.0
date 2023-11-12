@@ -50,7 +50,7 @@ public class IndexPageServiceImpl  implements IndexPageService{
             IndexPageResponse response = new IndexPageResponse();
             String text = clearTags(url);
             Map<String, Integer> lemmas = collectLemmas(text, luceneMorphology);
-            Page page = pageRepository.findPageWithPath(url.getPath());
+            Page page = pageRepository.findPageByPath(url.getPath());
             if (page == null) {
                 response.setResult(false);
                 response.setError("Данная страница находится за пределами сайтов, " +

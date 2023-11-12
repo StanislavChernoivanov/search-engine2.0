@@ -9,11 +9,9 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import searchengine.dto.indexPage.LemmaFinder;
-import searchengine.model.entities.Indexes;
-import searchengine.model.entities.Lemma;
 import searchengine.model.entities.Page;
 import searchengine.model.entities.Site;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.RecursiveTask;
@@ -26,8 +24,6 @@ public class SiteParser extends RecursiveTask<SiteNode> {
     @Getter
     private final URL url;
     private final String host;
-
-
 
     public SiteParser(URL url, Site site) {
         this.url = url;
@@ -42,136 +38,57 @@ public class SiteParser extends RecursiveTask<SiteNode> {
         try {
             Document doc = connection.
                     userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
-                    .referrer("http://www.google.com").ignoreContentType(true).get();
-            Thread.sleep((long) (Math.random() * 500) + 300);
+                    .referrer("http://www.google.com").ignoreContentType(true).ignoreHttpErrors(true).get();
             Elements elements = doc.select("a[href]");
-            Session session = CreateSession.getSession();
+            Session session = HibernateUtil.getSESSION_FACTORY().openSession();
+            String attr = null;
             for (Element element : elements) {
-                String attr = element.attr("abs:href");
-                if (attr.contains("http") || attr.contains("https")) {
-                    URL attrUrl = new URL(attr);
-                    if (!attrUrl.getHost().replaceAll("www\\.", "").equals(host) ||
-                            attr.matches(".*#$") || attr.contains("javascript") ||
-                            !attr.contains(url.toString()) || attr.equals(url.toString()) ||
-                            attrUrl.getPath().equals("/") ||
-                            !CreateSession.urlIsUnique(new URL(attr).getPath(), session)) {
-                        continue;
-                    }
-                    LemmaFinder finder = new LemmaFinder();
-                    // Получаем мап с леммами
-                    Map<String, Integer> lemmas = finder.collectLemmas(doc.text());
-                    Transaction t = session.beginTransaction();
-                    try{
-                        Page page = new Page();
-                        page.setCode(connection.response().statusCode());
-                        page.setContent(doc.html());
-                        page.setSite(site);
-                        page.setPath(attrUrl.getPath());
-                        session.save(page);
-                        t.commit();
-                        // Из мапы получаем сет и в цикле проводим операции по созданию и обновлению каждой леммы
-                        Set<String> keySet = lemmas.keySet();
-                        for (String key : keySet) {
-                            // Если лемма не существует создаем лемму и индекс и сохраняем в бд
-                            if(!CreateSession.lemmaIsExist(key, session)) {
-                                t.begin();
-                                Lemma lemma = new Lemma();
-                                lemma.setSite(site);
-                                lemma.setLemma(key);
-                                lemma.setFrequency(1);
-                                session.save(lemma);
-                                t.commit();
-                                t.begin();
-                                Indexes index = new Indexes();
-                                index.setPage(page);
-                                index.setLemma(lemma);
-                                index.setRank(lemmas.get(key));
-                                session.save(index);
-                                t.commit();
-                                // Если не существует только индекс то у леммы увеличиваем frequency на 1 и создаем индекс
-                            } else if (!CreateSession.indexIsExist(CreateSession.
-                                    findLemma(key, session).getId(), page.getId())) {
-                                t.begin();
-                                Lemma lemma = CreateSession.findLemma(key, session);
-                                lemma.setFrequency(lemma.getFrequency() + 1);
-                                session.update(lemma);
-                                t.commit();
-                                t.begin();
-                                Indexes index = new Indexes();
-                                index.setPage(page);
-                                index.setLemma(lemma);
-                                index.setRank(lemmas.get(key));
-                                session.save(index);
-                                t.commit();
-                            } else {
-                                // Если существует и лемма и индекс то просто увеличиваем частоту на 1
-                                t.begin();
-                                Lemma lemma = CreateSession.findLemma(key,session);
-                                lemma.setFrequency(lemma.getFrequency() + 1);
-                                session.update(lemma);
-                                t.commit();
-                            }
-                        }
-                    } catch (Exception e) {
-                        t.rollback();
-                        e.printStackTrace();
-                    }
-                    childListAdd(childes, attr);
-                    path = attr;
+                attr = element.attr("abs:href");
+                URL attrUrl = null;
+                try {
+                    attrUrl = new URL(attr);
+                } catch (MalformedURLException ignored) {
+                }
+                assert attrUrl != null;
+                if (!attrUrl.getHost().replaceAll("www\\.", "").equals(host) ||
+                        attr.matches(".*#$") || attr.contains("javascript") ||
+                        !attr.contains(url.toString()) || attr.equals(url.toString()) ||
+                        attrUrl.getPath().equals("/") ||
+                        !HibernateUtil.urlIsUnique(attrUrl.getPath(), session)) {
+                    continue;
+                }
+                Connection con = Jsoup.connect(attr);
+                Document d = con.
+                        userAgent("Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+                        .referrer("http://www.google.com")
+                        .ignoreContentType(true).ignoreHttpErrors(true).get();
+                Transaction t = session.getTransaction();
+                try {
+                    t.begin();
+                    Page page = new Page();
+                    page.setCode(con.response().statusCode());
+                    page.setContent(d.html());
+                    page.setSite(site);
+                    page.setPath(attrUrl.getPath());
+                    session.save(page);
+                    t.commit();
+                } catch (Exception e) {
+                    t.rollback();
+                    e.printStackTrace();
                 }
             }
+            assert attr != null;
+            childListAdd(childes, attr);
+            path = attr;
             session.close();
         } catch (Exception e) {
             LOGGER.error("{} \n {} \n{}",path, e.getMessage(), e.getStackTrace());
+            e.printStackTrace();
         }
         return childes;
     }
 
-//    private void addLemmaAndIndexIntoDB(String pathPage, Session session,
-//                                        Map<String, Integer> lemmas) throws InterruptedException {
-//        Set<String> keySet = lemmas.keySet();
-//        Page page = CreateSession.getPageOnPath(pathPage, session);
-//        for (String key : keySet) {
-//            Lemma lemma;
-//            Indexes index = new Indexes();
-//            if(!CreateSession.lemmaIsExist(key)) {
-//                Transaction t = session.beginTransaction();
-//                lemma = new Lemma();
-//                lemma.setSite(site);
-//                lemma.setLemma(key);
-//                lemma.setFrequency(1);
-//                session.save(lemma);
-//                t.commit();
-//                t = session.beginTransaction();
-//                index.setPage(page);
-//                index.setLemma(lemma);
-//                index.setRank(lemmas.get(key));
-//                session.save(index);
-//                t.commit();
-//            } else if (!CreateSession.indexIsExist(CreateSession.
-//                    findLemma(key).getId(), page.getId())) {
-//                Transaction t = session.beginTransaction();
-//                lemma = CreateSession.findLemma(key);
-//                lemma.setFrequency(lemma.getFrequency() + 1);
-//                session.update(lemma);
-//                t.commit();
-//                t = session.beginTransaction();
-//                index.setPage(page);
-//                index.setLemma(lemma);
-//                index.setRank(lemmas.get(key));
-//                session.save(index);
-//                t.commit();
-//            } else {
-//                Transaction t = session.beginTransaction();
-//                lemma = CreateSession.findLemma(key);
-//                lemma.setFrequency(lemma.getFrequency() + 1);
-//                session.update(lemma);
-//                t.commit();
-//            }
-//        }
-//    }
-
-    @Override
+        @Override
     protected SiteNode compute() {
         Set<String> childes = getChildes(url);
         if (childes.isEmpty()) {
@@ -199,19 +116,8 @@ public class SiteParser extends RecursiveTask<SiteNode> {
 
     private void childListAdd(Set<String> childes, String child) {
         Optional<String> isChild = childes.stream().filter(child::contains).findFirst();
-        if (isChild.isEmpty()) {
-            try {
-                URL childURL = new URL(child);
-                if (!childURL.getHost().replaceAll("www\\.", "").equals(host)) {
-                    return;
-                }
-            } catch (Exception exception) {
-                LOGGER.error("{} \n {} \n{}",child, exception.getMessage(), exception.getStackTrace());
-            }
-            if (!childes.isEmpty()) {
-                childes.removeIf(c -> c.contains(child));
-            }
-            childes.add(child);
-        }
+        if (isChild.isEmpty()) return;
+        childes.removeIf(c -> c.contains(child));
+        childes.add(child);
     }
 }
