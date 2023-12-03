@@ -12,30 +12,29 @@ import searchengine.services.StatisticsService;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping("/api")
 public class ApiController {
-    @Autowired
     private final StatisticsService statisticsService;
-    @Autowired
+
     private final StartIndexingService startIndexingService;
-    @Autowired
+
     private final IndexPageService indexPageService;
 
-    public ApiController(StatisticsService statisticsService,
-                         StartIndexingService startIndexingService,
-                         IndexPageService indexPageService) {
+    public ApiController(StatisticsService statisticsService, StartIndexingService startIndexingService, IndexPageService indexPageService) {
         this.statisticsService = statisticsService;
         this.startIndexingService = startIndexingService;
         this.indexPageService = indexPageService;
     }
+
     @GetMapping("/startIndexing")
     public ResponseEntity<StartIndexingResponse> startIndexing() throws InterruptedException {
         return ResponseEntity.ok(startIndexingService.startIndexing());
     }
     @GetMapping("/stopIndexing")
-    public ResponseEntity<StartIndexingResponse> stopIndexing() {
+    public ResponseEntity<StartIndexingResponse> stopIndexing() throws InterruptedException, ExecutionException {
         return ResponseEntity.ok(startIndexingService.stopIndexing());
     }
 

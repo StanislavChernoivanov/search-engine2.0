@@ -25,4 +25,5 @@ public class Site {
     private String url;
     @Column(columnDefinition = "VARCHAR(70)")
     private String name;
+
 }

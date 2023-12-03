@@ -1,13 +1,7 @@
 package searchengine.model.entities;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.Cascade;
-
 import javax.persistence.*;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.List;
-
 
 @Entity
 @Table(name = "lemmas",
@@ -17,7 +11,6 @@ import java.util.List;
 @Getter
 @Setter
 public class Lemma {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;

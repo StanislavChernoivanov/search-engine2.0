@@ -21,7 +21,7 @@ public class Page {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
-    @ManyToOne(cascade = CascadeType.PERSIST)
+    @ManyToOne(cascade = CascadeType.MERGE)
     @JoinColumn(nullable = false, foreignKey = @ForeignKey(name = "FK_site_index"))
     private Site site;
 
