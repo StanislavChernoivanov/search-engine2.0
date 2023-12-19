@@ -6,6 +6,7 @@ import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.transaction.annotation.Transactional;
 import searchengine.model.entities.Indexes;
@@ -13,17 +14,18 @@ import searchengine.model.entities.Lemma;
 import searchengine.model.entities.Page;
 import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.LemmaRepository;
-
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.Callable;
+
+
 
 @RequiredArgsConstructor
-public class LemmaIndexer implements Callable<Integer> {
+public class LemmaIndexer implements Runnable {
     @Getter
     private final Page page;
     private final LemmaRepository lemmaRepository;
     private final IndexesRepository indexesRepository;
+
 
     private static final String[] particlesNames = new String[]{"МЕЖД", "ПРЕДЛ", "СОЮЗ"};
     private static final LuceneMorphology RUSSIAN_MORPHOLOGY;
@@ -36,37 +38,49 @@ public class LemmaIndexer implements Callable<Integer> {
         }
     }
 
-    public Integer call() {
-        int i = 0;
+    public void run() {
         Map<String, Integer> lemmas = collectLemmas(clearTags(page.getContent()));
-        Set<String> keySet = lemmas.keySet();
-        keySet.forEach(k -> insertInDataBase(k, lemmas));
-        return i;
+        lemmas.keySet().forEach(k -> insertInDataBase(k.trim(), lemmas));
     }
 
     private void insertInDataBase(String key, Map<String, Integer> lemmas) {
-        Optional<Lemma> optionalLemma = Optional.ofNullable(lemmaRepository.findLemma(key));
-        if (optionalLemma.isPresent()) {
-            Lemma lemma = optionalLemma.get();
-            lemma.setFrequency(lemma.getFrequency() + 1);
-            lemmaRepository.saveAndFlush(lemma);
-            Indexes index = new Indexes();
-            index.setPage(page);
-            index.setLemma(lemma);
-            index.setRank(lemmas.get(key));
-            indexesRepository.saveAndFlush(index);
-        } else {
-            Lemma lemma = new Lemma();
-            lemma.setSite(page.getSite());
-            lemma.setLemma(key);
-            lemma.setFrequency(1);
-            lemmaRepository.saveAndFlush(lemma);
-            Indexes index = new Indexes();
-            index.setPage(page);
-            index.setLemma(lemma);
-            index.setRank(lemmas.get(key));
-            indexesRepository.saveAndFlush(index);
+        try {
+            Optional<Lemma> optionalLemma = Optional.ofNullable(lemmaRepository.findLemma(key));
+            if (optionalLemma.isPresent()) {
+                merge(optionalLemma, lemmas.get(key));
+            }
+            else {
+                persist(page, key, lemmas.get(key));
+            }
+        } catch (DataIntegrityViolationException exception) {
+            exception.printStackTrace();
+            throw new RuntimeException();
         }
+    }
+
+    @Transactional()
+    private void persist(Page page, String key, float rank) {
+        Lemma lemma = new Lemma();
+        lemma.setFrequency(1);
+        lemma.setSite(page.getSite());
+        lemma.setLemma(key);
+        Indexes index = new Indexes();
+        index.setPage(page);
+        index.setLemma(lemma);
+        index.setRank(rank);
+        lemmaRepository.save(lemma);
+        indexesRepository.save(index);
+    }
+    @Transactional
+    private void merge(Optional<Lemma> optionalLemma, float rank) {
+        Lemma lemma = optionalLemma.get();
+        lemma.setFrequency(lemma.getFrequency() + 1);
+        Indexes index = new Indexes();
+        index.setPage(page);
+        index.setLemma(lemma);
+        index.setRank(rank);
+        lemmaRepository.save(lemma);
+        indexesRepository.save(index);
     }
 
     public static String clearTags(String content) {

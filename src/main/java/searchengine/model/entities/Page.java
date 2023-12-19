@@ -3,10 +3,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import javax.persistence.*;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
+
 
 
 @Entity
@@ -30,8 +27,20 @@ public class Page {
     @Column(columnDefinition = "MEDIUMTEXT", nullable = false)
     private String content;
 
+    @Override
+    public int hashCode() {
+        return this.id;
+    }
 
-//    @OneToMany(mappedBy = "pages", cascade = CascadeType.ALL)
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Page page = (Page) obj;
+        return path.equals(page.path);
+    }
+
+    //    @OneToMany(mappedBy = "pages", cascade = CascadeType.ALL)
 //    private List<Indexes> indexList = new ArrayList<>();
 
 }

@@ -17,4 +17,7 @@ public interface LemmaRepository extends JpaRepository<Lemma, Integer> {
 
     @Query("SELECT CASE WHEN (COUNT(l) > 0) THEN true ELSE false END FROM Lemma l WHERE l.lemma = :lemma")
     boolean lemmaIsExist(@Param("lemma") String lemma);
+
+    @Override
+    <S extends Lemma> S save(S entity);
 }

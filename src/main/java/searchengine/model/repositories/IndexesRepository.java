@@ -11,7 +11,9 @@ import searchengine.model.entities.Indexes;
 @Repository
 public interface IndexesRepository extends JpaRepository<Indexes, Integer> {
     @Query("select case when (count(i) > 0) then true else false end " +
-            "from Indexes i where i.lemma = :lemma and i.page = :page")
+            "from Indexes i where i.lemma.id = :lemma and i.page.id = :page")
     boolean indexIsExist(@Param(value = "lemma") int lemma, @Param("page") int page);
 
+    @Override
+    <S extends Indexes> S save(S entity);
 }
