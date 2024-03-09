@@ -1,9 +1,10 @@
 indexing-settings:
   sites:
     - url: https://www.svetlovka.ru/
-      name: Библиотека
-    - url: https://dimonvideo.ru/
-      name: Dimon
+      name: Svetlovka
+
+
+
 
 
 

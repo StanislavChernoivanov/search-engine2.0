@@ -1,39 +1,34 @@
 package searchengine.dto.startIndexing;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
-
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinPool;
+
+
 @RequiredArgsConstructor
-public class PageIndexingThread implements Runnable, Comparable<PageIndexingThread> {
+public class PageIndexingThread implements Runnable {
     private final String url;
     @Getter
     private final Site site;
     private final PageRepository repository;
 
+    public static final Logger LOGGER = LogManager.getLogger(PageIndexingThread.class);
+
     @Override
     public void run() {
-        SiteParser parser;
+        SiteParserForStartIndexingService parser;
         try {
-            parser = new SiteParser(new URL(url), site, repository);
+            parser = new SiteParserForStartIndexingService(new URL(url), site, repository);
             SiteNode main = new ForkJoinPool().invoke(parser);
+            LOGGER.info(System.lineSeparator() + main);
         } catch (MalformedURLException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
         }
-
-    }
-
-    @Override
-    public int hashCode() {
-        return this.site.getId();
-    }
-
-    @Override
-    public int compareTo(PageIndexingThread o) {
-        return this.site.getName().compareTo(o.getSite().getName());
     }
 }
+

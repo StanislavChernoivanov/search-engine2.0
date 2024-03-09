@@ -1,12 +1,12 @@
 package searchengine.services;
 
-import searchengine.dto.startIndexing.StartIndexingResponse;
+import searchengine.dto.startIndexing.Response;
 
 import java.util.concurrent.ExecutionException;
 
 public interface StartIndexingService {
 
-    StartIndexingResponse startIndexing() throws InterruptedException;
+    Response startIndexing() throws InterruptedException;
 
-    StartIndexingResponse stopIndexing() throws InterruptedException, ExecutionException;
+    Response stopIndexing() throws InterruptedException, ExecutionException;
 }

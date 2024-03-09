@@ -1,12 +1,12 @@
 package searchengine.controllers;
-import org.apache.lucene.morphology.LuceneMorphology;
-import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import searchengine.dto.startIndexing.StartIndexingResponse;
+import searchengine.dto.startIndexing.Response;
 import searchengine.dto.statistics.StatisticsResponse;
+import searchengine.search.SearchResponse;
 import searchengine.services.IndexPageService;
+import searchengine.services.SearchService;
 import searchengine.services.StartIndexingService;
 import searchengine.services.StatisticsService;
 
@@ -16,25 +16,21 @@ import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class ApiController {
     private final StatisticsService statisticsService;
-
     private final StartIndexingService startIndexingService;
-
     private final IndexPageService indexPageService;
+    private final SearchService searchService;
 
-    public ApiController(StatisticsService statisticsService, StartIndexingService startIndexingService, IndexPageService indexPageService) {
-        this.statisticsService = statisticsService;
-        this.startIndexingService = startIndexingService;
-        this.indexPageService = indexPageService;
-    }
+
 
     @GetMapping("/startIndexing")
-    public ResponseEntity<StartIndexingResponse> startIndexing() throws InterruptedException {
+    public ResponseEntity<Response> startIndexing() throws InterruptedException {
         return ResponseEntity.ok(startIndexingService.startIndexing());
     }
     @GetMapping("/stopIndexing")
-    public ResponseEntity<StartIndexingResponse> stopIndexing() throws InterruptedException, ExecutionException {
+    public ResponseEntity<Response> stopIndexing() throws InterruptedException, ExecutionException {
         return ResponseEntity.ok(startIndexingService.stopIndexing());
     }
 
@@ -44,9 +40,17 @@ public class ApiController {
     }
 
     @PostMapping("/indexPage")
-    public ResponseEntity<?> indexPage(@RequestParam String strUrl,
-                                       LuceneMorphology luceneMorphology) throws IOException {
-        return ResponseEntity.ok(indexPageService.indexPage(new URL(strUrl),
-                new RussianLuceneMorphology()));
+    public ResponseEntity<Response> indexPage(@RequestParam(name = "url") String strUrl)
+            throws IOException, InterruptedException {
+        return ResponseEntity.ok(indexPageService.indexPage(new URL(strUrl)));
     }
+
+    @GetMapping("/search")
+    public ResponseEntity<SearchResponse> search(@RequestParam(name = "query") String query,
+                                           @RequestParam(name = "site", required = false) String site,
+                                           @RequestParam(name = "offset", required = false) Integer offset,
+                                           @RequestParam(name = "limit", required = false) Integer limit)  {
+        return ResponseEntity.ok(searchService.search(query, site, offset, limit));
+    }
+
 }
