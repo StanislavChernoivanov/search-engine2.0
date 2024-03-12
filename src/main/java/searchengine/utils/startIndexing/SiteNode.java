@@ -1,4 +1,4 @@
-package searchengine.dto.startIndexing;
+package searchengine.utils.startIndexing;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
@@ -11,7 +11,6 @@ import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
 import java.io.IOException;
 import java.net.URL;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 

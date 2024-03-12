@@ -1,8 +1,6 @@
 package searchengine.services;
 
-import org.apache.lucene.morphology.LuceneMorphology;
-import searchengine.dto.indexPage.IndexPageResponse;
-import searchengine.dto.startIndexing.Response;
+import searchengine.utils.Response;
 
 import java.io.IOException;
 import java.net.URL;

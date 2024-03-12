@@ -1,9 +1,9 @@
 package searchengine.services;
-import searchengine.search.SearchResponse;
+import searchengine.utils.Response;
 
 public interface SearchService {
-    SearchResponse search(String query,
-                          String site,
-                          Integer offset,
-                          Integer limit);
+    Response search(String query,
+                    String site,
+                    Integer offset,
+                    Integer limit);
 }

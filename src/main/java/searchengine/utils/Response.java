@@ -1,4 +1,4 @@
-package searchengine.dto.startIndexing;
+package searchengine.utils;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -13,6 +13,6 @@ public class Response {
         this.error = error;
     }
 
-    private boolean result;
-    private String error;
+    protected boolean result;
+    protected String error;
 }

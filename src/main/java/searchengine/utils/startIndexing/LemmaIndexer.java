@@ -1,4 +1,4 @@
-package searchengine.dto.startIndexing;
+package searchengine.utils.startIndexing;
 import lombok.*;
 import lombok.extern.log4j.Log4j2;
 import org.jsoup.Jsoup;
@@ -52,8 +52,8 @@ public class LemmaIndexer implements Runnable {
         index.setPage(page);
         index.setLemma(lemma);
         index.setRank(rank);
-        lemmaRepository.saveAndFlush(lemma);
-        indexesRepository.saveAndFlush(index);
+        lemmaRepository.save(lemma);
+        indexesRepository.save(index);
     }
     @Transactional()
     private void refresh(Lemma lemma, float rank) {
@@ -62,8 +62,8 @@ public class LemmaIndexer implements Runnable {
         index.setPage(page);
         index.setLemma(lemma);
         index.setRank(rank);
-        lemmaRepository.saveAndFlush(lemma);
-        indexesRepository.saveAndFlush(index);
+        lemmaRepository.save(lemma);
+        indexesRepository.save(index);
     }
 
     public static String clearTags(String content) {

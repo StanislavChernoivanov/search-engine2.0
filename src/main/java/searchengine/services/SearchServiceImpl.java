@@ -6,17 +6,18 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
-import searchengine.dto.startIndexing.LemmaCollector;
+import searchengine.utils.startIndexing.LemmaCollector;
+import searchengine.utils.Response;
 import searchengine.model.entities.Lemma;
 import searchengine.model.entities.Page;
 import searchengine.model.entities.Site;
 import searchengine.model.repositories.LemmaRepository;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
-import searchengine.search.Relevance;
-import searchengine.search.SearchResponse;
-import searchengine.search.SearchResultData;
-import searchengine.search.Snippet;
+import searchengine.utils.search.Relevance;
+import searchengine.utils.search.SearchResponse;
+import searchengine.utils.search.SearchResultData;
+import searchengine.utils.search.Snippet;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -32,47 +33,42 @@ public class SearchServiceImpl implements SearchService {
     private int siteId = 0;
 
     @Override
-    public SearchResponse search(String query, String site, Integer offset, Integer limit) {
+    public Response search(String query, String site, Integer offset, Integer limit) {
         if(offset == null) offset = 0;
         if (limit == null) limit = 0;
-        if (Objects.equals(query, ""))
-            return getWrongResponse(false, "Задан пустой поисковый запрос");
-        Set<Lemma> lemmas = new TreeSet<>(Comparator.comparingInt(Lemma::getFrequency));
+        if (query == null)
+            return new Response(false, "Задан пустой " +
+                    "поисковый запрос");
         lemmaCollector.clearMap();
         Set<String> lemmasFromQuerySet = lemmaCollector.collectLemmas(query).keySet();
         if (siteRepository.findAll().isEmpty())
-            return getWrongResponse(false, "Отсутствует индекс сайта. Необходимо провести индексацию");
+            return new Response(false, "Отсутствует индекс сайта. " +
+                    "Необходимо провести индексацию");
         if (site == null) {
             Set<SearchResponse> wellResponseSet;
-            SearchResponse searchResponseCommon = new SearchResponse();
             Set<SearchResponse> responseSet = new HashSet<>();
             List<Site> siteList = siteRepository.findAll();
             Integer finalOffset = offset;
             Integer finalLimit = limit;
             siteList.forEach(s ->
-                responseSet.add(countRelevanceAndGetResponse
-                (lemmas, lemmasFromQuerySet, s.getUrl(), finalOffset, finalLimit)));
+                responseSet.add((SearchResponse) countRelevanceAndGetResponse
+                (lemmasFromQuerySet, s.getUrl(), finalOffset, finalLimit)));
             wellResponseSet = responseSet.stream()
                     .filter(response -> response.getCount() != 0)
                     .collect(Collectors.toSet());
             if(wellResponseSet.size() == responseSet.size()) {
-                searchResponseCommon.setResult(true);
-                searchResponseCommon.setCount
-                    (wellResponseSet.stream().map(SearchResponse::getCount).reduce(Integer::sum).get());
+                int count = (wellResponseSet.stream().map(SearchResponse::getCount)
+                        .reduce(Integer::sum).get());
                 Set<SearchResultData> commonSearchResultData = new TreeSet<>();
                 wellResponseSet.forEach(r -> commonSearchResultData.addAll(r.getSearchResultData()));
-                searchResponseCommon.setSearchResultData(commonSearchResultData);
-                return searchResponseCommon;
+                return new SearchResponse(true, "", count, commonSearchResultData);
             } else if(responseSet.size() - wellResponseSet.size() != responseSet.size()) {
-                searchResponseCommon.setResult(true);
-                searchResponseCommon.setCount
-                    (wellResponseSet.stream().map(SearchResponse::getCount).
+                int count = (wellResponseSet.stream().map(SearchResponse::getCount).
                     reduce(Integer::sum).get());
                 Set<SearchResultData> commonSearchResultData = new TreeSet<>();
                 wellResponseSet.stream().filter(r -> r.getCount() > 0)
                     .forEach(r -> commonSearchResultData.addAll(r.getSearchResultData()));
-                searchResponseCommon.setSearchResultData(commonSearchResultData);
-                return searchResponseCommon;
+                return new SearchResponse(true, "", count, commonSearchResultData);
             } else {
                 return responseSet.stream().filter(r -> !r.getError()
                         .isEmpty()).findFirst().orElse(
@@ -80,18 +76,18 @@ public class SearchServiceImpl implements SearchService {
                         r -> r.getError().isEmpty() && r.getCount() == 0).findFirst().get());
             }
         } else {
-                return countRelevanceAndGetResponse(lemmas, lemmasFromQuerySet, site, offset, limit);
+                return countRelevanceAndGetResponse(lemmasFromQuerySet, site, offset, limit);
         }
     }
 
-    // TODO: 09.03.2024 dont get snippet on request like "Историк по образованию" 
-    private SearchResponse countRelevanceAndGetResponse
-                                        (Set<Lemma> lemmas, Set<String> lemmasFromQuerySet,
+    private Response countRelevanceAndGetResponse
+                                        (Set<String> lemmasFromQuerySet,
              String site, int offset, int limit) {
+        Set<Lemma> lemmas = new TreeSet<>(Comparator.comparingInt(Lemma::getFrequency));
         Optional<Site> siteEntity = siteRepository.findSiteByUrl(site);
         if(siteEntity.isEmpty())
-            return getWrongResponse(false, "Указанный сайт не найден");
-
+            return new Response(false
+                    , "Указанный сайт не найден");
         siteId = siteEntity.get().getId();
         for (String s : lemmasFromQuerySet) {
             Optional<Lemma> optionalLemma = Optional.ofNullable
@@ -99,10 +95,10 @@ public class SearchServiceImpl implements SearchService {
             optionalLemma.ifPresent(lemmas::add);
         }
         if(lemmas.isEmpty())
-            return getWrongResponse(true, "");
-
+            return new SearchResponse(true, "", 0, null);
         Set<Page> pageSet = new HashSet<>();
-        Optional<Lemma> lemma = lemmas.stream().findFirst();
+        Optional<Lemma> lemma = lemmas.stream().filter(lemma1 ->
+                lemma1.getSite().getId() == siteId).findFirst();
         lemma.get().getIndexesList().forEach(i -> pageSet.add(i.getPage()));
         List<Page> pages = pageSet.stream().filter(p -> {
             boolean isContains = true;
@@ -113,42 +109,13 @@ public class SearchServiceImpl implements SearchService {
             return isContains;
         }).toList();
         if(pages.isEmpty())
-            return getWrongResponse(true, "");
+            return new SearchResponse(true, "", 0, null);
         else if(pages.size() > 50)
-            return getWrongResponse(false, "Найдено слишком много страниц. " +
-                    "Введите больше слов для уточнения");
-
+            return new Response(false, "Найдено слишком много страниц. " +
+                "Введите больше слов для уточнения");
         pageSet.clear();
-        Map<Page, Float> absoluteRelevanceMap = new HashMap<>();
-        pages.forEach(p -> {
-            Optional<Float> summ = p.getIndexList().stream().
-                    filter(i -> i.getPage().getPath().equals(p.getPath()))
-                    .map(index -> {
-                        float commonPercent = (float) index.getLemma().getFrequency() /
-                                pageRepository.findCountPagesBySiteId(siteId) * 100;
-                        if(commonPercent < 30) return index.getRank();
-                        else return 0.0f;
-                    }).reduce(Float::sum);
-            summ.ifPresent(aFloat -> absoluteRelevanceMap.put(p, aFloat));
-        });
-        Relevance relevance = new Relevance(absoluteRelevanceMap);
-        Map<Page, Float> relativeRelevance = relevance.getRelativeRelevance();
+        Map<Page, Float> relativeRelevance = Relevance.getRelativeRelevance(pages, pageRepository, siteId);
         return setResponse(relativeRelevance, lemmasFromQuerySet, offset, limit);
-    }
-
-    private SearchResponse getWrongResponse(boolean result, String errorText) {
-        SearchResponse searchResponse = new SearchResponse();
-        searchResponse.setResult(result);
-        searchResponse.setError(errorText);
-        return searchResponse;
-    }
-    private SearchResponse getWellResponse(int count, Set<SearchResultData> searchResultData) {
-        SearchResponse searchResponse = new SearchResponse();
-        searchResponse.setResult(true);
-        searchResponse.setError("");
-        searchResponse.setCount(count);
-        searchResponse.setSearchResultData(searchResultData);
-        return searchResponse;
     }
 
     private SearchResponse setResponse(Map<Page, Float> relativeRelevance
@@ -156,7 +123,6 @@ public class SearchServiceImpl implements SearchService {
                                         , int offset, int limit) {
         Set<SearchResultData> searchResultDataSet = new TreeSet<>();
         relativeRelevance.keySet().forEach(p -> {
-            StringBuilder snippetStrings = new StringBuilder();
             Document document = Jsoup.parse(p.getContent());
             Elements elements = document.body().getAllElements();
             TreeSet<Snippet> snippets = new TreeSet<>();
@@ -198,28 +164,39 @@ public class SearchServiceImpl implements SearchService {
                     snippets.addAll(getSnippets(words, wordsOfElementContainedInQuery, e));
                 }
             });
-            List<Snippet> snippetList = new ArrayList<>(snippets);
-            for(int i = 0; i < snippetList.size(); i++) {
-                if(i == 0)snippetStrings.append(snippetList.get(i).getSnippet()).append(", ");
-                else {
-                    if(i > 10) break;
-                    if(!Snippet.compareSnippets(snippetList.get(i), snippetList.get(i - 1)
-                        , queryWords.size()))
-                        snippetStrings.append(snippetList.get(i).getSnippet()).append(", ");
-                }
-            }
-            System.out.println(snippetStrings);
-            SearchResultData searchResultData = new SearchResultData();
-            searchResultData.setRelevance(relativeRelevance.get(p));
-            searchResultData.setSite(p.getSite().getUrl());
-            searchResultData.setSiteName(p.getSite().getName());
-            searchResultData.setUri(p.getPath());
-            searchResultData.setTitle(document.title());
-            searchResultData.setSnippet(snippetStrings);
-            searchResultDataSet.add(searchResultData);
+            searchResultDataSet.add(getSearchResultData(snippets
+                , relativeRelevance, p, document, queryWords));
         });
-        return getWellResponse(relativeRelevance.size()
-            , getPartOfData(searchResultDataSet, offset, limit));
+        return new SearchResponse(true, "",
+                relativeRelevance.size(), getPartOfData(searchResultDataSet, offset, limit));
+    }
+
+    private SearchResultData getSearchResultData(TreeSet<Snippet> snippets
+            , Map<Page, Float> relativeRelevance, Page p, Document document
+            , Set<String> queryWords) {
+        List<Snippet> snippetList = new ArrayList<>(snippets);
+        SearchResultData searchResultData = new SearchResultData();
+        searchResultData.setRelevance(relativeRelevance.get(p));
+        searchResultData.setSite(p.getSite().getUrl());
+        searchResultData.setSiteName(p.getSite().getName());
+        searchResultData.setUri(p.getPath());
+        searchResultData.setTitle(document.title());
+        searchResultData.setSnippet(limitNumberOfSnippets(snippetList, queryWords));
+        return searchResultData;
+    }
+
+    private StringBuilder limitNumberOfSnippets(List<Snippet> snippetList, Set<String> queryWords) {
+        StringBuilder snippetStrings = new StringBuilder();
+        for(int i = 0; i < snippetList.size(); i++) {
+            if(i == 0)snippetStrings.append(snippetList.get(i).getSnippet()).append(", ");
+            else {
+                if(i > 7) break;
+                if(!Snippet.compareSnippets(snippetList.get(i), snippetList.get(i - 1)
+                        , queryWords.size()))
+                    snippetStrings.append(snippetList.get(i).getSnippet()).append(", ");
+            }
+        }
+        return snippetStrings;
     }
 
     private Set<SearchResultData> getPartOfData(Set<SearchResultData> searchResultData,
@@ -267,7 +244,7 @@ public class SearchServiceImpl implements SearchService {
             snippetSet.add(new Snippet(snippet, StringUtils.countMatches(snippet, "<b>")));
         });
         List<Snippet> snippetList = new ArrayList<>(snippetSet);
-        for(int i = 0; i < snippetSet.size() - 1; i++) {
+        for(int i = 0; i < (snippetList.size() < 2 ? snippetSet.size() : snippetList.size() - 1); i++) {
             if(i == 0) uniqueSnippetList.add(snippetList.get(i));
             else if(StringUtils.countMatches(snippetList.get(i).getSnippet(), "<b>") == 1)
                 uniqueSnippetList.add(snippetList.get(i));

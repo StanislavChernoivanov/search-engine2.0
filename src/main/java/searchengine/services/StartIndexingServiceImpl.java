@@ -4,9 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
-import searchengine.dto.startIndexing.LemmaIndexer;
-import searchengine.dto.startIndexing.PageIndexingThread;
-import searchengine.dto.startIndexing.Response;
+import searchengine.utils.startIndexing.LemmaIndexer;
+import searchengine.utils.startIndexing.PagesIndexingThread;
+import searchengine.utils.Response;
 import searchengine.model.entities.EnumStatus;
 import searchengine.model.entities.Page;
 import searchengine.model.repositories.IndexesRepository;
@@ -46,7 +46,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
             site.setStatusTime(LocalDateTime.now());
             site.setLastError("");
             siteRepository.save(site);
-            Thread thread = new Thread(new PageIndexingThread(site.getUrl(), site, pageRepository));
+            Thread thread = new Thread(new PagesIndexingThread(site.getUrl(), site, pageRepository));
             thread.start();
             indexingThreadMap.put(thread, site);
         });
@@ -76,6 +76,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
         Collection<searchengine.model.entities.Site> doneCorrectlySet = doneCorrectlyMap.values();
         doneCorrectlySet.forEach(s -> pageSet.addAll(pageRepository.findPageBySiteId(s.getId())));
         lemmanizationThreadList = new ArrayList<>();
+        double timeStamp = System.currentTimeMillis();
         pageSet.forEach(p -> {
             Thread task = new Thread(new LemmaIndexer(p, lemmaRepository, indexesRepository));
             service.submit(task);
@@ -97,6 +98,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
             }
             Thread.sleep(3000);
         }
+        System.out.println(System.currentTimeMillis() - timeStamp);
         doneCorrectlySet.forEach(site -> {
             site.setStatusTime(LocalDateTime.now());
             site.setStatus(EnumStatus.INDEXED);

@@ -32,7 +32,7 @@ public class Site implements Serializable {
     @Column(columnDefinition = "VARCHAR(70)")
     private String name;
 
-    @OneToMany(mappedBy = "site", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "site")
     private List<Lemma> LemmaList = new ArrayList<>();
 
 }

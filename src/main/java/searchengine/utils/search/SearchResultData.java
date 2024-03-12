@@ -1,9 +1,7 @@
-package searchengine.search;
+package searchengine.utils.search;
 
 import lombok.Data;
 import lombok.Getter;
-
-import javax.swing.text.html.HTML;
 
 @Data
 @Getter

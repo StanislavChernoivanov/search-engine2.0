@@ -1,8 +1,7 @@
-package searchengine.search;
+package searchengine.utils.search;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
-
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -35,14 +34,4 @@ public class Snippet implements Comparable<Snippet> {
         if(countOfLemmaInQuery < 5) return countOfLemmaInQuery - counter.get() <= 1;
         else return countOfLemmaInQuery - counter.get() <= 2;
     }
-//    @Override
-//    public boolean equals(Object obj) {
-//        if (this == obj) return true;
-//        if (obj == null || getClass() != obj.getClass()) return false;
-//        Snippet snippet = (Snippet) obj;
-//        return Arrays.equals(StringUtils
-//            .substringsBetween(snippet.getSnippet(), "<b>", "</b>")
-//            , (StringUtils.substringsBetween(snippet
-//            .getSnippet(), "<b>", "</b>")));
-//    }
 }

@@ -1,4 +1,4 @@
-package searchengine.dto.startIndexing;
+package searchengine.utils.startIndexing;
 import lombok.Getter;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;

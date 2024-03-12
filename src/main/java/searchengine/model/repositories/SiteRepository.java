@@ -12,10 +12,6 @@ import java.util.OptionalLong;
 @Repository
 public interface SiteRepository extends JpaRepository<Site, Integer> {
 
-    @Query("select s from Site s where s.status = :status")
-    List<Site> findSiteByStatus(@Param("status") String status);
-
-
     @Query("select s from Site s where s.url = :url")
     Optional<Site> findSiteByUrl(@Param("url") String url);
 }
