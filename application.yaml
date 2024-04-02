@@ -1,9 +1,15 @@
 indexing-settings:
   sites:
-    - url: https://www.svetlovka.ru/
-      name: Svetlovka
+#    - url: https://lenta.ru/
+#      name: Lenta
+#    - url: https://skillbox.ru/
+#      name: Skillbox
+#    - url: https://lenta.ru/
+#      name: Svetlovka
     - url: https://dimonvideo.ru/
       name: Dimonvideo
+#    - url: https://playback.ru/
+#      name: PlayBack
 
 
 

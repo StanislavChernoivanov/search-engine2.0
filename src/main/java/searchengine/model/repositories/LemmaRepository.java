@@ -10,6 +10,7 @@ import searchengine.model.entities.Lemma;
 import searchengine.model.entities.Page;
 
 import java.util.List;
+import java.util.Optional;
 
 
 @Repository

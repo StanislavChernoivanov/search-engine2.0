@@ -19,12 +19,11 @@ public class StatisticsServiceImpl implements StatisticsService {
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
     private final LemmaRepository lemmaRepository;
-    private final SitesList sites;
 
     @Override
     public Response getStatistics() {
         TotalStatistics total = new TotalStatistics();
-        total.setSites(sites.getSites().size());
+        total.setSites(siteRepository.getCountSites());
         total.setPages(pageRepository.getCountPages());
         total.setLemmas(lemmaRepository.getCountLemmas());
         total.setIndexing(true);

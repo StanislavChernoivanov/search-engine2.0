@@ -14,4 +14,7 @@ public interface SiteRepository extends JpaRepository<Site, Integer> {
 
     @Query("select s from Site s where s.url = :url")
     Optional<Site> findSiteByUrl(@Param("url") String url);
+
+    @Query(value = "SELECT count(*) FROM sites", nativeQuery = true)
+    int getCountSites();
 }

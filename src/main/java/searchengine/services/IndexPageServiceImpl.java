@@ -1,5 +1,4 @@
 package searchengine.services;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
@@ -13,12 +12,13 @@ import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.LemmaRepository;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
+import searchengine.utils.startIndexing.SaverOrRefresher;
+
 import java.io.IOException;
 import java.net.URL;
 import java.util.*;
 
 @Service
-@RequiredArgsConstructor
 @Log4j2
 public class IndexPageServiceImpl  implements IndexPageService{
 
@@ -29,6 +29,21 @@ public class IndexPageServiceImpl  implements IndexPageService{
         private Document doc;
         private Connection connection;
         private final SitesList sites;
+        private final SaverOrRefresher saverOrRefresher;
+
+    public IndexPageServiceImpl(LemmaRepository lemmaRepository,
+                                IndexesRepository indexesRepository,
+                                PageRepository pageRepository,
+                                SiteRepository siteRepository,
+                                SitesList sites) {
+        this.lemmaRepository = lemmaRepository;
+        this.indexesRepository = indexesRepository;
+        this.pageRepository = pageRepository;
+        this.siteRepository = siteRepository;
+        this.sites = sites;
+        saverOrRefresher = new SaverOrRefresher(lemmaRepository);
+    }
+
 
 
 
@@ -59,36 +74,15 @@ public class IndexPageServiceImpl  implements IndexPageService{
             pageRepository.delete(outdatedPage);
             indexList.clear();
             if (isAvailableWebPage(url)) {
-                Page newPage = new Page();
-                newPage.setPath(url.getPath());
-                newPage.setCode(connection.response().statusCode());
-                newPage.setContent(doc.html());
-                newPage.setSite(outdatedPage.getSite());
-                pageRepository.save(newPage);
-                LemmaIndexer lemmaIndexer =
-                        new LemmaIndexer(newPage, lemmaRepository, indexesRepository);
-                Thread thread = new Thread(lemmaIndexer);
-                thread.start();
-                thread.join();
-            } else {
-                Page newPage = new Page();
-                newPage.setPath(url.getPath());
-                newPage.setCode(404);
-                newPage.setContent("");
-                newPage.setSite(site);
-                pageRepository.save(newPage);
-                response.setResult(false);
-                response.setError("Отсутствует соединение с данной страницей");
-                return response;
+                if(!indexPageIfPageExist(url))
+                    return new Response(false, "Отсутствует соединение с данной страницей");
             }
         } else {
             List<searchengine.config.Site> siteList = sites.getSites();
-            if (siteList.stream().noneMatch(s -> s.getUrl().contains(url.getHost()))) {
-                response.setResult(false);
-                response.setError("Данная страница находится за пределами сайтов, " +
+            if (siteList.stream().noneMatch(s -> s.getUrl().contains(url.getHost())))
+                return new Response(false, "Данная страница находится за пределами сайтов, " +
                         "указанных в конфигурационном файле");
-                return response;
-            } else {
+            else {
                 searchengine.config.Site site = siteList.stream().filter(s ->
                         s.getUrl().contains(url.getHost())).findFirst().get();
                 Optional<Site> optionalSite = siteRepository.findSiteByUrl(site.getUrl());
@@ -108,9 +102,7 @@ public class IndexPageServiceImpl  implements IndexPageService{
                     newPage.setContent("");
                     newPage.setSite(siteModel);
                     pageRepository.save(newPage);
-                    response.setResult(false);
-                    response.setError("Отсутствует соединение с данной страницей");
-                    return response;
+                    return new Response(false, "Отсутствует соединение с данной страницей");
                 } else {
                     Page newPage = new Page();
                     newPage.setPath(url.getPath());
@@ -118,8 +110,9 @@ public class IndexPageServiceImpl  implements IndexPageService{
                     newPage.setContent(doc.html());
                     newPage.setSite(siteModel);
                     pageRepository.save(newPage);
+
                     LemmaIndexer lemmaIndexer =
-                            new LemmaIndexer(newPage, lemmaRepository, indexesRepository);
+                            new LemmaIndexer(newPage, saverOrRefresher);
                     Thread thread = new Thread(lemmaIndexer);
                     thread.start();
                     thread.join();
@@ -127,6 +120,53 @@ public class IndexPageServiceImpl  implements IndexPageService{
             }
         }
         return response;
+    }
+
+    private boolean indexPageIfPageExist(URL url) throws InterruptedException {
+        Page outdatedPage = pageRepository.findPageByPath(url.getPath());
+        Site site = outdatedPage.getSite();
+        List<Indexes> indexList = indexesRepository.
+                findIndexWithSpecifiedPageId(outdatedPage.getId());
+        List<Optional<Lemma>> lemmaList = new ArrayList<>();
+        indexList.forEach(i -> lemmaList.add(Optional.ofNullable(i.getLemma())));
+        indexList.forEach(indexesRepository::delete);
+        lemmaList.forEach(l -> {
+            if (l.isPresent()) {
+                Lemma lemma = l.get();
+                if (lemma.getFrequency() == 1) {
+                    lemmaRepository.delete(lemma);
+                } else {
+                    lemma.setFrequency((lemma.getFrequency() - 1));
+                    lemmaRepository.save(lemma);
+                }
+            }
+        });
+        lemmaList.clear();
+        pageRepository.delete(outdatedPage);
+        indexList.clear();
+        if (isAvailableWebPage(url)) {
+            Page newPage = new Page();
+            newPage.setPath(url.getPath());
+            newPage.setCode(connection.response().statusCode());
+            newPage.setContent(doc.html());
+            newPage.setSite(outdatedPage.getSite());
+            pageRepository.save(newPage);
+            LemmaIndexer lemmaIndexer =
+                    new LemmaIndexer(newPage, saverOrRefresher);
+            Thread thread = new Thread(lemmaIndexer);
+            thread.start();
+            thread.join();
+            saverOrRefresher.saveRemainedLemmasInDB();
+            return true;
+        } else {
+            Page newPage = new Page();
+            newPage.setPath(url.getPath());
+            newPage.setCode(404);
+            newPage.setContent("");
+            newPage.setSite(site);
+            pageRepository.save(newPage);
+            return false;
+        }
     }
 
     private boolean isAvailableWebPage(URL url) {

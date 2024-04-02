@@ -10,36 +10,41 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
+import searchengine.model.repositories.SiteRepository;
+
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 import java.util.concurrent.RecursiveTask;
 
-public class SiteParserForStartIndexingService extends RecursiveTask<SiteNode> {
+public class SiteParser extends RecursiveTask<SiteNode> {
 
-    private static final Logger LOGGER = LogManager.getLogger(SiteParserForStartIndexingService.class);
+    private static final Logger LOGGER = LogManager.getLogger(SiteParser.class);
     @Getter
     private final URL url;
     private final String host;
-
     private final Site site;
     private final PageRepository pageRepository;
+    private final SiteRepository siteRepository;
 
 
-    public SiteParserForStartIndexingService(URL url, Site site, PageRepository pageRepository) {
+    public SiteParser(URL url, Site site, PageRepository pageRepository, SiteRepository siteRepository) {
         this.site = site;
         this.pageRepository = pageRepository;
         this.url = url;
         host = url.getHost().replaceAll("www\\.", "");
+        this.siteRepository = siteRepository;
     }
 
     private Set<String> getChildes(URL parent) {
         Set<String> childes = new TreeSet<>();
-        Connection connection = Jsoup.connect(parent.toString()).maxBodySize(0);
+        Connection connection = Jsoup.connect(parent.toString()).userAgent("Mozilla/5.0 (Windows; U; WindowsNT" +
+                        " 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+                .referrer("http://www.google.com");
         try {
             Thread.sleep((long) (Math.random() * 50 + 100));
-            Document doc = connection.get();
+            Document doc = connection.ignoreContentType(true).get();
             Elements elements = doc.select("a[href]");
             for (Element element : elements) {
                 String attr = element.attr("abs:href");
@@ -61,38 +66,38 @@ public class SiteParserForStartIndexingService extends RecursiveTask<SiteNode> {
         Set<String> childes = getChildes(url);
         if (childes.isEmpty()) {
             try {
-                return new SiteNode(url, pageRepository, site);
+                return new SiteNode(url, pageRepository, site, siteRepository);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         } else {
-            SiteNode node = null;
+            SiteNode node;
             try {
-                node = new SiteNode(url, pageRepository, site);
+                node = new SiteNode(url, pageRepository, site, siteRepository);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
             try {
-                List<SiteParserForStartIndexingService> taskList = getSiteParserForStartIndexingServices(childes);
-                for (SiteParserForStartIndexingService task : taskList) {
+                List<SiteParser> taskList
+                        = getSiteParserForStartIndexingServices(childes);
+                for (SiteParser task : taskList) {
                         SiteNode child = task.join();
                         node.addChild(child);
                 }
             } catch (Exception exception) {
-//                exception.printStackTrace();
                 LOGGER.error("{} \n{}", exception.getMessage(), exception.getStackTrace());
             }
             return node;
         }
     }
 
-    private List<SiteParserForStartIndexingService> getSiteParserForStartIndexingServices(Set<String> childes) {
-        List<SiteParserForStartIndexingService> taskList = new ArrayList<>();
+    private List<SiteParser> getSiteParserForStartIndexingServices(Set<String> childes) {
+        List<SiteParser> taskList = new ArrayList<>();
         for (String child : childes) {
-            SiteParserForStartIndexingService task = null;
+            SiteParser task = null;
             try {
-                task = new SiteParserForStartIndexingService
-                                (new URL(child), site, pageRepository);
+                task = new SiteParser
+                                (new URL(child), site, pageRepository, siteRepository);
             } catch (MalformedURLException ignored) {}
             try {
                 task.fork();
@@ -103,7 +108,7 @@ public class SiteParserForStartIndexingService extends RecursiveTask<SiteNode> {
         return taskList;
     }
 
-    private void childListAdd(Set<String> childes, String child) throws MalformedURLException {
+    private void childListAdd(Set<String> childes, String child) {
         Optional<String> isChild = childes.stream().filter(child::contains).findFirst();
         if (isChild.isEmpty()) {
             try {

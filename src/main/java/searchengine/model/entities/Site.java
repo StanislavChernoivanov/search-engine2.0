@@ -1,8 +1,8 @@
 package searchengine.model.entities;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import javax.persistence.*;
-import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +15,8 @@ import java.util.List;
                 unique = true))
 @Getter
 @Setter
-public class Site implements Serializable {
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+public class Site {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,6 +29,7 @@ public class Site implements Serializable {
     @Column(name = "last_error")
     private String lastError;
     @Column(columnDefinition = "VARCHAR(255)", nullable = false)
+    @EqualsAndHashCode.Include
     private String url;
     @Column(columnDefinition = "VARCHAR(70)")
     private String name;

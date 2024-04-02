@@ -9,10 +9,16 @@ import org.jsoup.nodes.Document;
 import searchengine.model.entities.Page;
 import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
+import searchengine.model.repositories.SiteRepository;
+
 import java.io.IOException;
 import java.net.URL;
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 @Getter
 @Log4j2
@@ -23,22 +29,33 @@ public class SiteNode implements Comparable<SiteNode> {
     private final URL url;
     private final PageRepository pageRepository;
     private final Site site;
+    private static final Set<Page> pageSetToDB = Collections.synchronizedSet(new HashSet<>());
+    private static Connection connection = Jsoup.newSession();
+    private final SiteRepository siteRepository;
 
+    public SiteNode(URL url, PageRepository pageRepository, Site site, SiteRepository siteRepository) throws IOException {
 
-    public SiteNode(URL url, PageRepository pageRepository, Site site) throws IOException {
         this.pageRepository = pageRepository;
         this.site = site;
         this.url = url;
+        this.siteRepository = siteRepository;
+        createAndSavePage();
+    }
 
-        Connection connection;
+    public synchronized void createAndSavePage() {
+
         Connection.Response response = null;
         Document doc = null;
         Page page = new Page();
         try {
-            connection = Jsoup.connect(url.toString()).
-                    maxBodySize(0).timeout(5000);
-            response = connection.execute();
-            doc = response.parse();
+            synchronized (connection) {
+                connection = Jsoup.connect(url.toString()).userAgent("Mozilla/5.0 (Windows; U; WindowsNT" +
+                                " 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+                        .referrer("http://www.google.com").
+                        maxBodySize(0);
+                response = connection.ignoreContentType(true).execute();
+                doc = response.parse();
+            }
         }
         catch (HttpStatusException ex) {
             log.info("{}\n{}", ex.getMessage(), ex.getStackTrace());
@@ -54,10 +71,24 @@ public class SiteNode implements Comparable<SiteNode> {
         } else  page.setContent("");
         page.setSite(site);
         page.setPath(url.getPath());
-        synchronized (this) {
-            if (!pageRepository.pageIsExist(url.getPath(), site.getId()))
-                pageRepository.save(page);
+        synchronized (pageRepository) {
+            if (!pageRepository.pageIsExist(url.getPath(),
+                    site.getId())) {
+                pageSetToDB.add(page);
+                if (pageSetToDB.size() >= 30) {
+                    site.setStatusTime(LocalDateTime.now());
+                    synchronized (siteRepository) {
+                        siteRepository.save(site);
+                    }
+                    pageRepository.saveAllAndFlush(pageSetToDB);
+                    pageSetToDB.clear();
+                }
+            }
         }
+    }
+
+    public static synchronized Set<Page> getRemainingPages() {
+        return pageSetToDB;
     }
 
     public void addChild(SiteNode child) {

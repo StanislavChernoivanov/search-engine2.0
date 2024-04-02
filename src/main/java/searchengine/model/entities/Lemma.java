@@ -1,44 +1,31 @@
 package searchengine.model.entities;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import javax.persistence.*;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 @Entity
 @Table(name = "lemmas",uniqueConstraints =
-@UniqueConstraint(name = "l_index", columnNames = {"lemma", "site_id"}))
+@UniqueConstraint(name = "l_index", columnNames = {"lemma", "site_id"}),
+        indexes = @javax.persistence.Index(name = "lemma_index", columnList = "lemma"))
 @Getter
 @Setter
-public class Lemma implements Serializable {
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+public class Lemma {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(nullable = false, foreignKey = @ForeignKey(name = "FK_index_site2"))
+    @EqualsAndHashCode.Include
     private Site site;
     @Column(columnDefinition = "VARCHAR(255)")
+    @EqualsAndHashCode.Include
     private String lemma;
     private int frequency;
-    @OneToMany(mappedBy = "lemma")
+    @OneToMany(mappedBy = "lemma", cascade = CascadeType.ALL)
     private List<Indexes> indexesList = new ArrayList<>();
-    @Override
-    public int hashCode() {
-        char[] i = lemma.toCharArray();
-        StringBuilder builder = new StringBuilder();
-        for(int j : i) {
-            builder.append(j);
-        }
-        return id + Integer.parseInt(builder.toString()
-                .toCharArray().length > 7 ? builder.substring(0, 6) : builder.toString());
-    }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
-        Lemma lemma = (Lemma) obj;
-        return this.lemma.equals(lemma.lemma);
-    }
 }
