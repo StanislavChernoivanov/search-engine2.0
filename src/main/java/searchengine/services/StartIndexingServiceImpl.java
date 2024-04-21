@@ -4,7 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
-import searchengine.model.entities.Lemma;
 import searchengine.utils.startIndexing.LemmaIndexer;
 import searchengine.utils.startIndexing.PagesIndexingThread;
 import searchengine.utils.Response;
@@ -85,10 +84,10 @@ public class StartIndexingServiceImpl implements StartIndexingService {
         doneCorrectlySet.forEach(s -> pageSet.addAll(pageRepository.findPageBySiteId(s.getId())));
         lemmanizationThreadList = new ArrayList<>();
         double timeStamp = System.currentTimeMillis();
-        SaverOrRefresher saverOrRefresher = new SaverOrRefresher(lemmaRepository);
+        SaverOrRefresher saverOrRefresher = new SaverOrRefresher(lemmaRepository, indexesRepository);
         pageSet.forEach(p -> {
             Thread task = new Thread(new LemmaIndexer(p, saverOrRefresher));
-            service.submit(task);
+            service.submit(new LemmaIndexer(p, saverOrRefresher));
             lemmanizationThreadList.add(task);
         });
         while(lemmanizationThreadList.stream().anyMatch(Thread::isAlive)) Thread.sleep(5000);

@@ -41,7 +41,7 @@ public class IndexPageServiceImpl  implements IndexPageService{
         this.pageRepository = pageRepository;
         this.siteRepository = siteRepository;
         this.sites = sites;
-        saverOrRefresher = new SaverOrRefresher(lemmaRepository);
+        saverOrRefresher = new SaverOrRefresher(lemmaRepository, indexesRepository);
     }
 
 

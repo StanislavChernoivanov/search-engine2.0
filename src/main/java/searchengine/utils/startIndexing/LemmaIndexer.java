@@ -14,17 +14,19 @@ public class LemmaIndexer implements Runnable {
     private final Page page;
     private final SaverOrRefresher saverOrRefresher;
 
+
     public void run() {
-        Map<String, Integer> lemmas = new LemmaCollector().collectLemmas(clearTags(page.getContent()));
-        lemmas.keySet().forEach(k -> insertInDataBase(k, lemmas));
+        Map<String, Integer> lemmas = new LemmaCollector()
+                .collectLemmas(clearTags(page.getContent()));
+        lemmas.keySet().forEach(k -> insertInDataBase(k, lemmas.get(k)));
     }
 
     private void insertInDataBase
-            (String key, Map<String, Integer> lemmas) {
-        saverOrRefresher.saveOrRefresh(key, lemmas, page);
+            (String key, Integer rank) {
+        saverOrRefresher.saveOrRefresh(key, rank, page);
     }
 
-    public static synchronized String clearTags(String content) {
+    public String clearTags(String content) {
         StringBuilder builder = new StringBuilder();
         Document doc = Jsoup.parse(content);
         Elements elements = doc.getAllElements();

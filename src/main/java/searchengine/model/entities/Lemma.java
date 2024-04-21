@@ -17,7 +17,7 @@ public class Lemma {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @JoinColumn(nullable = false, foreignKey = @ForeignKey(name = "FK_index_site2"))
     @EqualsAndHashCode.Include
     private Site site;
@@ -25,7 +25,7 @@ public class Lemma {
     @EqualsAndHashCode.Include
     private String lemma;
     private int frequency;
-    @OneToMany(mappedBy = "lemma", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "lemma")
     private List<Indexes> indexesList = new ArrayList<>();
 
 }

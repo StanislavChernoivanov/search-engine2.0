@@ -6,13 +6,24 @@ import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RequiredArgsConstructor
 public class LemmaCollector {
     private static final String[] particlesNames = new String[]{"МЕЖД", "ПРЕДЛ", "СОЮЗ"};
     public static final LuceneMorphology RUSSIAN_MORPHOLOGY;
 
-    private final Map<String, Integer> lemmas = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, Integer> lemmas = new ConcurrentHashMap<>();
+
+    private static LemmaCollector lemmaCollector;
+
+    public static synchronized LemmaCollector getInstance() {
+        if (lemmaCollector == null) {
+            lemmaCollector = new LemmaCollector();
+        }
+        return lemmaCollector;
+
+    }
 
 
     static {
@@ -24,6 +35,7 @@ public class LemmaCollector {
     }
 
     public Map<String, Integer> collectLemmas(String text) {
+        clearMap();
         String[] words = arrayContainsRussianWords(text);
         for (String word : words) {
             if(word.length() < 2 || (word.length() == 2
@@ -50,7 +62,7 @@ public class LemmaCollector {
         return wordBaseForms.stream().anyMatch(this::hasParticleProperty);
     }
 
-    public boolean anyWordBaseBelongToParticle(String word) {
+    public synchronized boolean anyWordBaseBelongToParticle(String word) {
         return hasParticleProperty(word);
     }
 

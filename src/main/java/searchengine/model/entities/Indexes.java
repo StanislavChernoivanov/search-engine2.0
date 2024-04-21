@@ -19,7 +19,7 @@ public class Indexes {
     @JoinColumn(foreignKey=@ForeignKey(name = "FK_index_page"), name = "page_id")
     @EqualsAndHashCode.Include
     private Page page;
-    @ManyToOne()
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(foreignKey=@ForeignKey(name = "FK_index_lemma"), name = "lemma_id")
     @EqualsAndHashCode.Include
     private Lemma lemma;
