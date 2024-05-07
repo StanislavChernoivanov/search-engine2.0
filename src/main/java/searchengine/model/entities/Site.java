@@ -34,7 +34,10 @@ public class Site {
     @Column(columnDefinition = "VARCHAR(70)")
     private String name;
 
-    @OneToMany(mappedBy = "site")
-    private List<Lemma> LemmaList = new ArrayList<>();
+    @OneToMany(mappedBy = "site", cascade = CascadeType.REMOVE)
+    private List<Page> pageList = new ArrayList<>();
+
+    @OneToMany(mappedBy = "site", cascade = CascadeType.REMOVE)
+    private List<Lemma> lemmaList = new ArrayList<>();
 
 }

@@ -2,6 +2,8 @@ package searchengine.model.entities;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
+
 import javax.persistence.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,19 +15,21 @@ import java.util.List;
 @Getter
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
 public class Lemma {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
     @ManyToOne()
-    @JoinColumn(nullable = false, foreignKey = @ForeignKey(name = "FK_index_site2"))
+    @JoinColumn(nullable = false, foreignKey = @ForeignKey(name = "FK_index_site2"), name = "site_id")
     @EqualsAndHashCode.Include
     private Site site;
     @Column(columnDefinition = "VARCHAR(255)")
     @EqualsAndHashCode.Include
     private String lemma;
     private int frequency;
-    @OneToMany(mappedBy = "lemma")
+    @OneToMany(mappedBy = "lemma", cascade = CascadeType.REMOVE)
     private List<Indexes> indexesList = new ArrayList<>();
+
 
 }

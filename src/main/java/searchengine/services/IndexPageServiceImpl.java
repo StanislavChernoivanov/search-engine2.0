@@ -41,7 +41,7 @@ public class IndexPageServiceImpl  implements IndexPageService{
         this.pageRepository = pageRepository;
         this.siteRepository = siteRepository;
         this.sites = sites;
-        saverOrRefresher = new SaverOrRefresher(lemmaRepository, indexesRepository);
+        saverOrRefresher = SaverOrRefresher.getInstance(lemmaRepository, indexesRepository);
     }
 
 
@@ -112,7 +112,7 @@ public class IndexPageServiceImpl  implements IndexPageService{
                     pageRepository.save(newPage);
 
                     LemmaIndexer lemmaIndexer =
-                            new LemmaIndexer(newPage, saverOrRefresher);
+                            new LemmaIndexer(siteModel, saverOrRefresher, pageRepository);
                     Thread thread = new Thread(lemmaIndexer);
                     thread.start();
                     thread.join();
@@ -152,7 +152,7 @@ public class IndexPageServiceImpl  implements IndexPageService{
             newPage.setSite(outdatedPage.getSite());
             pageRepository.save(newPage);
             LemmaIndexer lemmaIndexer =
-                    new LemmaIndexer(newPage, saverOrRefresher);
+                    new LemmaIndexer(site, saverOrRefresher, pageRepository);
             Thread thread = new Thread(lemmaIndexer);
             thread.start();
             thread.join();

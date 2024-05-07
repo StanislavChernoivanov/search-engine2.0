@@ -14,8 +14,10 @@ import searchengine.model.repositories.SiteRepository;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.util.*;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.RecursiveTask;
 
 public class SiteParser extends RecursiveTask<SiteNode> {
@@ -49,14 +51,19 @@ public class SiteParser extends RecursiveTask<SiteNode> {
             for (Element element : elements) {
                 String attr = element.attr("abs:href");
                 if (attr.matches(".*#$") || attr.contains("javascript")
-                    || !attr.contains(url.toString())
-                    || attr.equals(url.toString()))
+                        || !attr.contains(url.toString())
+                        || attr.equals(url.toString()))
                     continue;
                 childListAdd(childes, attr);
             }
-        } catch (HttpStatusException ignored) {}
-        catch (Exception e) {
-            LOGGER.error("{}\n{}", e.getMessage(), e.getStackTrace());
+        } catch (SocketTimeoutException socketTimeoutEx) {
+            LOGGER.info("{} - {}", parent, socketTimeoutEx.getMessage());
+        } catch (HttpStatusException httpStatusEx) {
+            LOGGER.info(httpStatusEx.getMessage());
+        } catch (InterruptedException ignored) {
+        } catch (Exception e) {
+            LOGGER.error("{} \n{} \n{}",e.getClass().getSimpleName(),
+                    e.getMessage(), e.getStackTrace());
         }
         return childes;
     }
@@ -81,11 +88,13 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                 List<SiteParser> taskList
                         = getSiteParserForStartIndexingServices(childes);
                 for (SiteParser task : taskList) {
-                        SiteNode child = task.join();
-                        node.addChild(child);
+                    SiteNode child = task.join();
+                    node.addChild(child);
                 }
+            } catch (CancellationException ignored) {
             } catch (Exception exception) {
-                LOGGER.error("{} \n{}", exception.getMessage(), exception.getStackTrace());
+                LOGGER.error("{} \n{} \n{}",exception.getClass().getSimpleName(),
+                        exception.getMessage(), exception.getStackTrace());
             }
             return node;
         }

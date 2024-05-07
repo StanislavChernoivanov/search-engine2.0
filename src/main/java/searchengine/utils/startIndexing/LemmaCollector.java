@@ -13,7 +13,7 @@ public class LemmaCollector {
     private static final String[] particlesNames = new String[]{"МЕЖД", "ПРЕДЛ", "СОЮЗ"};
     public static final LuceneMorphology RUSSIAN_MORPHOLOGY;
 
-    private final Map<String, Integer> lemmas = new ConcurrentHashMap<>();
+    private final Map<String, Integer> lemmas = new HashMap<>();
 
     private static LemmaCollector lemmaCollector;
 
@@ -41,7 +41,6 @@ public class LemmaCollector {
             if(word.length() < 2 || (word.length() == 2
                     && (word.contains("ь") || word.contains("ъ")))) continue;
             if (word.isBlank() || !word.matches("[а-яёА-ЯЁ]+")) continue;
-
             List<String> wordBaseForms = RUSSIAN_MORPHOLOGY.getMorphInfo(word);
             if (anyWordBaseBelongToParticle(wordBaseForms)) continue;
             List<String> normalForms = RUSSIAN_MORPHOLOGY.getNormalForms(word);
@@ -76,7 +75,7 @@ public class LemmaCollector {
             }
             return false;
         } catch (NullPointerException exception) {
-            return  true;
+            return true;
         }
     }
 

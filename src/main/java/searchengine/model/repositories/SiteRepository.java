@@ -8,6 +8,7 @@ import searchengine.model.entities.Site;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 
 @Repository
 public interface SiteRepository extends JpaRepository<Site, Integer> {

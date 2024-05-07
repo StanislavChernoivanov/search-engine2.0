@@ -1,15 +1,13 @@
 indexing-settings:
   sites:
-    - url: https://lenta.ru/
-      name: Lenta
+#    - url: https://lenta.ru/
+#      name: Lenta
 #    - url: https://skillbox.ru/
 #      name: Skillbox
     - url: https://dimonvideo.ru/
       name: Dimonvideo
-#    - url: https://playback.ru/
-#      name: PlayBack
-
-
+    - url: https://playback.ru/
+      name: PlayBack
 
 
 
@@ -18,8 +16,7 @@ spring:
     username: root
     password: 2664153Hgt!
     url:
-      jdbc:mysql://localhost:3306/search_engine?useSSL=false&requir
-      eSSL=false&allowPublicKeyRetrieval=true
+      jdbc:mysql://localhost:3306/search_engine?useSSL=false&requireSL=false&allowPublicKeyRetrieval=true
   jpa:
 
     properties:

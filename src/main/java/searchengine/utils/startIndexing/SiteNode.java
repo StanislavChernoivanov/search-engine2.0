@@ -10,6 +10,7 @@ import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -25,11 +26,18 @@ public class SiteNode implements Comparable<SiteNode> {
     private final URL url;
     private final PageRepository pageRepository;
     private final Site site;
-    private static final Set<Page> pageBuffer = new CopyOnWriteArraySet<>();
-    private static volatile Connection connection;
+    private static Set<Page> pageBuffer;
+    private Connection connection;
     private final SiteRepository siteRepository;
 
-    public SiteNode(URL url, PageRepository pageRepository, Site site, SiteRepository siteRepository) throws IOException {
+    static {
+        pageBuffer = new CopyOnWriteArraySet<>();
+    }
+
+    public SiteNode(URL url,
+                    PageRepository pageRepository,
+                    Site site,
+                    SiteRepository siteRepository) throws IOException {
 
         this.pageRepository = pageRepository;
         this.site = site;
@@ -38,48 +46,37 @@ public class SiteNode implements Comparable<SiteNode> {
         createAndSavePage();
     }
 
-    static {
-        connection = Jsoup.newSession().userAgent("Mozilla/5.0 (Windows; U; WindowsNT" +
-                " 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
-                .referrer("http://www.google.com").ignoreContentType(true).maxBodySize(0);
-    }
-
     public synchronized void createAndSavePage() {
-
         Connection.Response response;
         Document doc = null;
         Page page = new Page();
         try {
-            synchronized (connection) {
-                connection = Jsoup.connect(url.toString());
-                response = connection.execute();
-                doc = response.parse();
-                page.setCode(response.statusCode());
-            }
-        }
-        catch (HttpStatusException ex) {
-            log.info("{}\n{}", ex.getMessage(), ex.getStackTrace());
-        }
-        catch (IOException exception) {
-            log.error("{}\n{}", exception.getMessage(), exception.getStackTrace());
-        }
-        if (doc != null) {
-            page.setContent(doc.html());
-        } else {
-            page.setContent("");
-            page.setCode(404);
-        }
-        page.setSite(site);
-        page.setPath(url.getPath());
+            connection = Jsoup.connect(url.toString())
+                    .userAgent("Mozilla/5.0 (Windows; U; WindowsNT" +
+                            " 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
+                    .referrer("http://www.google.com")
+                    .ignoreContentType(true).maxBodySize(0);
+            response = connection.execute();
+            doc = response.parse();
+            page.setCode(response.statusCode());
+        } catch (SocketTimeoutException socketTimeoutEx) {
+            log.info("{} - {}", url.toString(), socketTimeoutEx.getMessage());
+        } catch (IOException ignored) {}
         synchronized (pageRepository) {
+            if (doc != null) {
+                page.setContent(doc.html());
+            } else {
+                page.setContent("");
+                page.setCode(404);
+            }
+            page.setSite(site);
+            page.setPath(url.getPath());
             if (!pageRepository.pageIsExist(url.getPath(),
                     site.getId())) {
                 pageBuffer.add(page);
                 if (pageBuffer.size() >= 30) {
                     site.setStatusTime(LocalDateTime.now());
-                    synchronized (siteRepository) {
-                        siteRepository.save(site);
-                    }
+                    siteRepository.save(site);
                     pageRepository.saveAll(pageBuffer);
                     pageBuffer.clear();
                 }
@@ -87,8 +84,11 @@ public class SiteNode implements Comparable<SiteNode> {
         }
     }
 
-    public static synchronized Set<Page> getRemainingPages() {
+    public static synchronized Set<Page> getPagesBuffer() {
         return pageBuffer;
+    }
+    public static synchronized void clearPagesBuffer() {
+        pageBuffer.clear();
     }
 
     public void addChild(SiteNode child) {
@@ -113,4 +113,5 @@ public class SiteNode implements Comparable<SiteNode> {
         return url.toString().compareTo(o.url.toString());
     }
 }
+
 
