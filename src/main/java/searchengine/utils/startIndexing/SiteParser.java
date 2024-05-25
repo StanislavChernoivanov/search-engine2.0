@@ -13,9 +13,7 @@ import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
 
 import java.io.IOException;
-import java.net.MalformedURLException;
-import java.net.SocketTimeoutException;
-import java.net.URL;
+import java.net.*;
 import java.util.*;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.RecursiveTask;
@@ -43,7 +41,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
         Set<String> childes = new TreeSet<>();
         Connection connection = Jsoup.connect(parent.toString()).userAgent("Mozilla/5.0 (Windows; U; WindowsNT" +
                         " 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
-                .referrer("http://www.google.com");
+                .referrer("http://www.google.com").maxBodySize(0).timeout(20_000);
         try {
             Thread.sleep((long) (Math.random() * 50 + 100));
             Document doc = connection.ignoreContentType(true).get();
@@ -56,7 +54,10 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                     continue;
                 childListAdd(childes, attr);
             }
-        } catch (SocketTimeoutException socketTimeoutEx) {
+        } catch (SocketException ex) {
+            LOGGER.info("{} - {}", parent, ex.getMessage());
+        }
+        catch (SocketTimeoutException socketTimeoutEx) {
             LOGGER.info("{} - {}", parent, socketTimeoutEx.getMessage());
         } catch (HttpStatusException httpStatusEx) {
             LOGGER.info(httpStatusEx.getMessage());
@@ -78,10 +79,13 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                 throw new RuntimeException(e);
             }
         } else {
-            SiteNode node;
+            SiteNode node = null;
             try {
                 node = new SiteNode(url, pageRepository, site, siteRepository);
-            } catch (IOException e) {
+            } catch (ConnectException ex) {
+                LOGGER.info("{} - {}", url.toString(), ex.getMessage());
+            }
+            catch (IOException e) {
                 throw new RuntimeException(e);
             }
             try {
@@ -89,6 +93,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                         = getSiteParserForStartIndexingServices(childes);
                 for (SiteParser task : taskList) {
                     SiteNode child = task.join();
+                    assert node != null;
                     node.addChild(child);
                 }
             } catch (CancellationException ignored) {
@@ -109,6 +114,7 @@ public class SiteParser extends RecursiveTask<SiteNode> {
                                 (new URL(child), site, pageRepository, siteRepository);
             } catch (MalformedURLException ignored) {}
             try {
+                assert task != null;
                 task.fork();
                 taskList.add(task);
             } catch (NullPointerException ignored) {

@@ -1,11 +1,13 @@
 package searchengine.utils.startIndexing;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
+
 import searchengine.model.entities.Indexes;
 import searchengine.model.entities.Lemma;
 import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.LemmaRepository;
+
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Log4j2
@@ -17,6 +19,8 @@ public class SaverOrRefresher {
     @Getter
     private final IndexesRepository indexesRepository;
     private static SaverOrRefresher saverOrRefresher;
+
+    public volatile boolean isInterrupted = false;
 
 
     public static synchronized SaverOrRefresher getInstance
@@ -39,13 +43,20 @@ public class SaverOrRefresher {
     }
 
     private synchronized void save() {
+        if (isInterrupted) {
+            lemmaBuffer.clear();
+            indexBuffer.clear();
+            log.info("Поток индексации - {} прерван", Thread.currentThread().getName());
+            throw new InterruptIndexingException("Indexing thread - "
+                    + Thread.currentThread().getName() + " is interrupted at "
+                    + LocalDateTime.now(), null, true, false);
+        }
         if (lemmaBuffer.size() >= 300) {
             try {
                 lemmaRepository.saveAll(lemmaBuffer);
                 indexesRepository.saveAll(indexBuffer);
-            }catch (Exception ex) {
-                log.error("{} \n{} \n{}", ex.getClass().getSimpleName(),ex.getMessage(), ex.getStackTrace());
-//                throw new RuntimeException();
+            } catch (Exception ex) {
+                log.error("{} \n{} \n{}", ex.getClass().getSimpleName(), ex.getMessage(), ex.getStackTrace());
             } finally {
                 lemmaBuffer.clear();
                 indexBuffer.clear();
@@ -72,5 +83,13 @@ public class SaverOrRefresher {
 
     synchronized Optional<Lemma> checkBuffer(String key) {
         return lemmaBuffer.stream().filter(l -> l.getLemma().equals(key)).findFirst();
+    }
+
+    static class InterruptIndexingException extends RuntimeException {
+        public InterruptIndexingException(String message, Throwable cause,
+                                          boolean enableSuppression,
+                                          boolean writableStackTrace) {
+            super(message, cause, enableSuppression, writableStackTrace);
+        }
     }
 }

@@ -52,7 +52,7 @@ public class IndexPageServiceImpl  implements IndexPageService{
         Response response = new Response(true, "");
         Optional<Page> optionalPage = Optional.ofNullable(pageRepository.findPageByPath(url.getPath()));
         if (optionalPage.isPresent()) {
-            Page outdatedPage = pageRepository.findPageByPath(url.getPath());
+            Page outdatedPage = optionalPage.get();
             Site site = outdatedPage.getSite();
             List<Indexes> indexList = indexesRepository.
                     findIndexWithSpecifiedPageId(outdatedPage.getId());
@@ -73,86 +73,46 @@ public class IndexPageServiceImpl  implements IndexPageService{
             lemmaList.clear();
             pageRepository.delete(outdatedPage);
             indexList.clear();
-            if (isAvailableWebPage(url)) {
-                if(!indexPageIfPageExist(url))
-                    return new Response(false, "Отсутствует соединение с данной страницей");
-            }
+            if(!indexPageIfPageExist(url, site))
+                return new Response(false, "Отсутствует соединение с данной страницей");
         } else {
             List<searchengine.config.Site> siteList = sites.getSites();
-            if (siteList.stream().noneMatch(s -> s.getUrl().contains(url.getHost())))
+            Optional<searchengine.config.Site> isSiteExist = siteList.stream().filter(s ->
+                    s.getUrl().contains(url.getHost())).findFirst();
+            if (isSiteExist.isEmpty())
                 return new Response(false, "Данная страница находится за пределами сайтов, " +
                         "указанных в конфигурационном файле");
             else {
-                searchengine.config.Site site = siteList.stream().filter(s ->
-                        s.getUrl().contains(url.getHost())).findFirst().get();
-                Optional<Site> optionalSite = siteRepository.findSiteByUrl(site.getUrl());
+                Optional<Site> optionalSite = siteRepository.findSiteByUrl(isSiteExist.get().getUrl());
                 Site siteModel;
-                String urlSite = site.getUrl();
+                String urlSite = isSiteExist.get().getUrl();
                 if (optionalSite.isEmpty() || !optionalSite.get().getUrl().equals(urlSite)) {
                     siteModel = new Site();
-                    siteModel.setUrl(site.getUrl());
-                    siteModel.setName(site.getName());
+                    siteModel.setUrl(isSiteExist.get().getUrl());
+                    siteModel.setName(isSiteExist.get().getName());
                     siteRepository.save(siteModel);
                 }
                 else siteModel = optionalSite.get();
-                if (!isAvailableWebPage(url)) {
-                    Page newPage = new Page();
-                    newPage.setPath(url.getPath());
-                    newPage.setCode(404);
-                    newPage.setContent("");
-                    newPage.setSite(siteModel);
-                    pageRepository.save(newPage);
+                if (!indexPageIfPageExist(url, siteModel)) {
                     return new Response(false, "Отсутствует соединение с данной страницей");
                 } else {
-                    Page newPage = new Page();
-                    newPage.setPath(url.getPath());
-                    newPage.setCode(connection.response().statusCode());
-                    newPage.setContent(doc.html());
-                    newPage.setSite(siteModel);
-                    pageRepository.save(newPage);
-
-                    LemmaIndexer lemmaIndexer =
-                            new LemmaIndexer(siteModel, saverOrRefresher, pageRepository);
-                    Thread thread = new Thread(lemmaIndexer);
-                    thread.start();
-                    thread.join();
+                    indexPageIfPageExist(url, siteRepository.findSiteByUrl(isSiteExist.get().getUrl()).get());
                 }
             }
         }
         return response;
     }
 
-    private boolean indexPageIfPageExist(URL url) throws InterruptedException {
-        Page outdatedPage = pageRepository.findPageByPath(url.getPath());
-        Site site = outdatedPage.getSite();
-        List<Indexes> indexList = indexesRepository.
-                findIndexWithSpecifiedPageId(outdatedPage.getId());
-        List<Optional<Lemma>> lemmaList = new ArrayList<>();
-        indexList.forEach(i -> lemmaList.add(Optional.ofNullable(i.getLemma())));
-        indexList.forEach(indexesRepository::delete);
-        lemmaList.forEach(l -> {
-            if (l.isPresent()) {
-                Lemma lemma = l.get();
-                if (lemma.getFrequency() == 1) {
-                    lemmaRepository.delete(lemma);
-                } else {
-                    lemma.setFrequency((lemma.getFrequency() - 1));
-                    lemmaRepository.save(lemma);
-                }
-            }
-        });
-        lemmaList.clear();
-        pageRepository.delete(outdatedPage);
-        indexList.clear();
+    private boolean indexPageIfPageExist(URL url, Site site) throws InterruptedException {
         if (isAvailableWebPage(url)) {
             Page newPage = new Page();
             newPage.setPath(url.getPath());
             newPage.setCode(connection.response().statusCode());
             newPage.setContent(doc.html());
-            newPage.setSite(outdatedPage.getSite());
+            newPage.setSite(site);
             pageRepository.save(newPage);
             LemmaIndexer lemmaIndexer =
-                    new LemmaIndexer(site, saverOrRefresher, pageRepository);
+                    new LemmaIndexer(site, saverOrRefresher, List.of(newPage));
             Thread thread = new Thread(lemmaIndexer);
             thread.start();
             thread.join();

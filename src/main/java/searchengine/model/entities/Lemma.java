@@ -5,6 +5,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import javax.persistence.*;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +17,7 @@ import java.util.List;
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
-public class Lemma {
+public class Lemma  implements Comparable<Lemma>, Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
@@ -32,4 +33,9 @@ public class Lemma {
     private List<Indexes> indexesList = new ArrayList<>();
 
 
+    @Override
+    public int compareTo(Lemma o) {
+        if(getFrequency() == o.getFrequency()) return Integer.compare(id, o.id);
+        return Integer.compare(this.frequency, o.frequency);
+    }
 }

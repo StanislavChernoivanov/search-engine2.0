@@ -20,10 +20,10 @@ public class LemmaIndexer implements Runnable {
     private final Site site;
     private final SaverOrRefresher saverOrRefresher;
     private final List<Page> pageList;
-    public LemmaIndexer(Site site, SaverOrRefresher saverOrRefresher, PageRepository pageRepository) {
+    public LemmaIndexer(Site site, SaverOrRefresher saverOrRefresher, List<Page> pageList) {
         this.site = site;
         this.saverOrRefresher = saverOrRefresher;
-        pageList = pageRepository.findPageBySiteId(site.getId());
+        this.pageList = pageList;
     }
 
     public void run() {
@@ -57,24 +57,20 @@ public class LemmaIndexer implements Runnable {
 
     public void saveOrRefresh
             (String key, Integer rank, Page page) {
-        try {
-            Lemma lemma = null;
-            Optional<Lemma> optionalLemma = saverOrRefresher.checkBuffer(key);
+        Lemma lemma = null;
+        Optional<Lemma> optionalLemma = saverOrRefresher.checkBuffer(key);
+        if (optionalLemma.isPresent()) {
+            lemma = optionalLemma.get();
+            updateLemma(lemma, rank, page);
+        } else {
+            optionalLemma = saverOrRefresher.getOptionalLemma(key, page.getSite().getId());
             if (optionalLemma.isPresent()) {
                 lemma = optionalLemma.get();
                 updateLemma(lemma, rank, page);
-            } else {
-                optionalLemma = saverOrRefresher.getOptionalLemma(key, page.getSite().getId());
-                if (optionalLemma.isPresent()) {
-                    lemma = optionalLemma.get();
-                    updateLemma(lemma, rank, page);
-                }
             }
-            if (lemma != null) return;
-            saveLemma(page, key, rank);
-        } catch (Exception ex) {
-            log.warn("{}\n{}\n{}", ex.getClass().getName(), ex.getMessage(), ex.getStackTrace());
         }
+        if (lemma != null) return;
+        saveLemma(page, key, rank);
     }
 
     public String clearTags(String content) {

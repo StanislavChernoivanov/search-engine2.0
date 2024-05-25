@@ -1,5 +1,7 @@
 package searchengine.services;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.StringUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -19,18 +21,29 @@ import searchengine.utils.search.SearchResponse;
 import searchengine.utils.search.SearchResultData;
 import searchengine.utils.search.Snippet;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.stream.Collectors;
 
 
 @Service
-@RequiredArgsConstructor
+@Log4j2
 public class SearchServiceImpl implements SearchService {
-
     private final LemmaRepository lemmaRepository;
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
     private final LemmaCollector lemmaCollector = new LemmaCollector();
+    private final Set<SearchResponse> containedMatchesResponses;
+    private final Set<Response> doNotContainedMatchesResponses;
     private int siteId = 0;
+
+    public SearchServiceImpl(LemmaRepository lemmaRepository, SiteRepository siteRepository, PageRepository pageRepository) {
+        this.lemmaRepository = lemmaRepository;
+        this.siteRepository = siteRepository;
+        this.pageRepository = pageRepository;
+        containedMatchesResponses = new HashSet<>();
+        doNotContainedMatchesResponses = new HashSet<>();
+    }
+
 
     @Override
     public Response search(String query, String site, Integer offset, Integer limit) {
@@ -45,57 +58,102 @@ public class SearchServiceImpl implements SearchService {
             return new Response(false, "Отсутствует индекс сайта. " +
                     "Необходимо провести индексацию");
         if (site == null) {
-            Set<SearchResponse> wellResponseSet;
-            Set<SearchResponse> responseSet = new HashSet<>();
             List<Site> siteList = siteRepository.findAll();
-            Integer finalOffset = offset;
             Integer finalLimit = limit;
-            siteList.forEach(s ->
-                responseSet.add((SearchResponse) countRelevanceAndGetResponse
-                (lemmasFromQuerySet, s.getUrl(), finalOffset, finalLimit)));
-            wellResponseSet = responseSet.stream()
-                    .filter(response -> response.getCount() != 0)
-                    .collect(Collectors.toSet());
-            if(wellResponseSet.size() == responseSet.size()) {
-                int count = (wellResponseSet.stream().map(SearchResponse::getCount)
-                        .reduce(Integer::sum).get());
+            siteList.forEach(s -> {
+                ResponseClass responseClass = countRelevanceAndGetResponse
+                        (lemmasFromQuerySet, s.getUrl(), finalLimit);
+                if(responseClass.getIsContainsMatches())
+                    containedMatchesResponses.add((SearchResponse) responseClass.getResponse());
+                else doNotContainedMatchesResponses.add(responseClass.getResponse());
+            });
+            if(doNotContainedMatchesResponses.isEmpty()) {
+                int count = containedMatchesResponses.stream().map(SearchResponse::getCount)
+                        .reduce(Integer::sum).get();
                 Set<SearchResultData> commonSearchResultData = new TreeSet<>();
-                wellResponseSet.forEach(r -> commonSearchResultData.addAll(r.getSearchResultData()));
-                return new SearchResponse(true, "", count, commonSearchResultData);
-            } else if(responseSet.size() - wellResponseSet.size() != responseSet.size()) {
-                int count = (wellResponseSet.stream().map(SearchResponse::getCount).
-                    reduce(Integer::sum).get());
+                containedMatchesResponses.stream().filter(r -> r.getSearchResultData() != null)
+                        .forEach(r -> commonSearchResultData.addAll(r.getSearchResultData()));
+                SearchResponse searchResponse =
+                        new SearchResponse(true, "", count, commonSearchResultData);
+                searchResponse.setSearchResultData(getPartOfData
+                        (searchResponse.getSearchResultData(), offset, limit));
+                clearMemory();
+                return isFoundTooManyPages(searchResponse, limit);
+            } else if(!containedMatchesResponses.isEmpty()) {
+                int count = containedMatchesResponses.stream().map(SearchResponse::getCount).
+                    reduce(Integer::sum).get();
                 Set<SearchResultData> commonSearchResultData = new TreeSet<>();
-                wellResponseSet.stream().filter(r -> r.getCount() > 0)
+                containedMatchesResponses.stream().filter(r -> r.getSearchResultData() != null)
                     .forEach(r -> commonSearchResultData.addAll(r.getSearchResultData()));
-                return new SearchResponse(true, "", count, commonSearchResultData);
+                SearchResponse searchResponse =
+                        new SearchResponse(true, "", count, commonSearchResultData);
+                searchResponse.setSearchResultData(getPartOfData
+                        (searchResponse.getSearchResultData(), offset, limit));
+                clearMemory();
+                return isFoundTooManyPages(searchResponse, limit);
             } else {
-                return responseSet.stream().filter(r -> !r.getError()
-                        .isEmpty()).findFirst().orElse(
-                        responseSet.stream().filter(
-                        r -> r.getError().isEmpty() && r.getCount() == 0).findFirst().get());
+                return doNotContainedMatchesResponses.stream().findFirst().get();
             }
         } else {
-                return countRelevanceAndGetResponse(lemmasFromQuerySet, site, offset, limit);
+            if (siteRepository.findSiteByUrl(site).isEmpty()) {
+                clearMemory();
+                return new Response(false
+                        , "Указанный сайт не найден");
+            }
+            SearchResponse searchResponse = (SearchResponse)
+                    countRelevanceAndGetResponse(lemmasFromQuerySet, site, limit).getResponse();
+            if(searchResponse.getSearchResultData() == null) {
+                clearMemory();
+                return searchResponse;
+            }
+            searchResponse.setSearchResultData(getPartOfData(searchResponse.getSearchResultData(), offset, limit));
+            clearMemory();
+                return isFoundTooManyPages(searchResponse, limit);
         }
     }
 
-    private Response countRelevanceAndGetResponse
+    private void clearMemory() {
+        doNotContainedMatchesResponses.clear();
+        containedMatchesResponses.clear();
+    }
+
+
+    private Response isFoundTooManyPages(SearchResponse searchResponse, Integer limit) {
+        if(searchResponse.getSearchResultData().size() > 50 && (limit > 50 || limit == 0)) {
+            return new Response(false,
+                    "Найдено слишком много страниц. " +
+                            "Уточните запрос или укажите значение limit (не более 50)");
+        } else return searchResponse;
+    }
+    @RequiredArgsConstructor
+    @Getter
+    private static class ResponseClass implements Comparable<ResponseClass> {
+        private  final Response response;
+        private final Boolean isContainsMatches;
+
+        @Override
+        public int compareTo(ResponseClass o) {
+            return Integer.compare(this.response.getError().length(), o.response.getError().length());
+        }
+    }
+
+    private ResponseClass countRelevanceAndGetResponse
                                         (Set<String> lemmasFromQuerySet,
-             String site, int offset, int limit) {
-        Set<Lemma> lemmas = new TreeSet<>(Comparator.comparingInt(Lemma::getFrequency));
+             String site, int limit) {
+        Set<Lemma> lemmas = new TreeSet<>();
         Optional<Site> siteEntity = siteRepository.findSiteByUrl(site);
         if(siteEntity.isEmpty())
-            return new Response(false
-                    , "Указанный сайт не найден");
+            return new ResponseClass(new Response(false
+                    , "Указанный сайт не найден"), false);
         siteId = siteEntity.get().getId();
         for (String s : lemmasFromQuerySet) {
             Optional<Lemma> optionalLemma = Optional.ofNullable
-                    (lemmaRepository.findLemma(s, siteEntity.get().getId()));
+                    (lemmaRepository.findLemma(s, siteId));
             optionalLemma.ifPresent(lemmas::add);
         }
-        if(lemmas.isEmpty())
-            return new SearchResponse(true, "", 0, null);
+        if(lemmas.size() != lemmasFromQuerySet.size())
+            return new ResponseClass(new SearchResponse(true, "",
+                    0, null), true);
         Set<Page> pageSet = new HashSet<>();
         Optional<Lemma> lemma = lemmas.stream().filter(lemma1 ->
                 lemma1.getSite().getId() == siteId).findFirst();
@@ -109,18 +167,20 @@ public class SearchServiceImpl implements SearchService {
             return isContains;
         }).toList();
         if(pages.isEmpty())
-            return new SearchResponse(true, "", 0, null);
-        else if(pages.size() > 50)
-            return new Response(false, "Найдено слишком много страниц. " +
-                "Введите больше слов для уточнения");
+            return new ResponseClass(new SearchResponse(true, "", 0, null), true);
         pageSet.clear();
-        Map<Page, Float> relativeRelevance = Relevance.getRelativeRelevance(pages, pageRepository, siteId);
-        return setResponse(relativeRelevance, lemmasFromQuerySet, offset, limit);
+        Map<Page, Float> relativeRelevance =
+                        Relevance.getRelativeRelevance(pages, pageRepository, siteId, limit);
+        if(!relativeRelevance.isEmpty())
+            return new ResponseClass(setResponse(relativeRelevance
+                    , lemmasFromQuerySet), true);
+        else return new ResponseClass(new Response(false,
+            "Найдено слишком много страниц. " +
+            "Уточните запрос или укажите значение limit (не более 50)"), false);
     }
 
     private SearchResponse setResponse(Map<Page, Float> relativeRelevance
-                                        , Set<String> queryWords
-                                        , int offset, int limit) {
+                                        , Set<String> queryWords) {
         Set<SearchResultData> searchResultDataSet = new TreeSet<>();
         relativeRelevance.keySet().forEach(p -> {
             Document document = Jsoup.parse(p.getContent());
@@ -168,7 +228,7 @@ public class SearchServiceImpl implements SearchService {
                 , relativeRelevance, p, document, queryWords));
         });
         return new SearchResponse(true, "",
-                relativeRelevance.size(), getPartOfData(searchResultDataSet, offset, limit));
+                relativeRelevance.size(), searchResultDataSet);
     }
 
     private SearchResultData getSearchResultData(TreeSet<Snippet> snippets
@@ -201,14 +261,11 @@ public class SearchServiceImpl implements SearchService {
 
     private Set<SearchResultData> getPartOfData(Set<SearchResultData> searchResultData,
                                                 int offset, int limit) {
-        if (limit == 0)
-            return new TreeSet<>(searchResultData.stream()
+        List<SearchResultData> subList = searchResultData.stream()
                 .toList().subList(offset < searchResultData.size() ? offset : 0
-                , searchResultData.size()));
+                        , searchResultData.size());
+        if (limit == 0) return new TreeSet<>(subList);
         else {
-            List<SearchResultData> subList = searchResultData.stream()
-                    .toList().subList(offset < searchResultData.size() ? offset : 0
-                    , searchResultData.size());
             return subList.stream().limit(Math.min(limit, searchResultData.size()))
                     .collect(Collectors.toCollection(TreeSet::new));
         }
@@ -260,16 +317,21 @@ public class SearchServiceImpl implements SearchService {
     private TreeSet<Snippet> getSnippetsWithoutTooCommonLemma(List<Snippet> snippets) {
         TreeSet<Snippet> goodSnippets = new TreeSet<>();
         snippets.forEach(s -> {
+            if(snippets.size() == 1) goodSnippets.add(s);
             if(s.getNumberOfMatchingWords() > 1) goodSnippets.add(s);
             else {
                 String makeLemmaFromSnippetWord = new LemmaCollector().collectLemmas(
                     StringUtils.substringBetween(s.getSnippet(), "<b>", "</b>")
                     .replaceAll("\\p{P}", "")
                     .trim()).keySet().stream().findFirst().get();
-                float commonPercent = (float) lemmaRepository.findLemmaBySiteIdAndByLemma(siteId,
-                    makeLemmaFromSnippetWord).getFrequency() /
-                    pageRepository.findCountPagesBySiteId(siteId) * 100;
-                if(commonPercent < 30) goodSnippets.add(s);
+                try {
+                    float commonPercent = (float) lemmaRepository.findLemmaBySiteIdAndLemma(siteId,
+                        makeLemmaFromSnippetWord).getFrequency() /
+                        pageRepository.findCountPagesBySiteId(siteId) * 100;
+                    if(commonPercent < 30) goodSnippets.add(s);
+                } catch (NullPointerException ex) {
+                    log.info("site id - {}, lemma - {} ", siteId, makeLemmaFromSnippetWord);
+                }
             }
         });
      return goodSnippets;
