@@ -1,4 +1,4 @@
-package searchengine.utils.search;
+package searchengine.dto.search;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;

@@ -1,5 +1,5 @@
 package searchengine.services;
-import searchengine.utils.Response;
+import searchengine.dto.Response;
 
 public interface SearchService {
     Response search(String query,

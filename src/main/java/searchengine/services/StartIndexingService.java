@@ -1,6 +1,6 @@
 package searchengine.services;
 
-import searchengine.utils.Response;
+import searchengine.dto.Response;
 
 import java.util.concurrent.ExecutionException;
 

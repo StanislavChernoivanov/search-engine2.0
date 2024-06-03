@@ -1,14 +1,15 @@
 package searchengine.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.hibernate.StaleStateException;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import searchengine.config.Site;
 import searchengine.config.SitesList;
 import searchengine.model.entities.Page;
+import searchengine.dto.Response;
 import searchengine.utils.startIndexing.LemmaIndexer;
 import searchengine.utils.startIndexing.SiteIndexer;
-import searchengine.utils.Response;
+import searchengine.dto.FailResponse;
 import searchengine.model.entities.EnumStatus;
 import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.LemmaRepository;
@@ -34,107 +35,24 @@ public class StartIndexingServiceImpl implements StartIndexingService {
     private final Map<SiteIndexer, searchengine.model.entities.Site> indexingThreadMap = new HashMap<>();
     private final List<Thread> threads = new ArrayList<>();
     private SaverOrRefresher saverOrRefresher;
+    @Value("${connection-properties.userAgent}")
+    private String userAgent;
+    @Value("${connection-properties.referrer}")
+    private String referrer;
 
 
     @Override
     public Response startIndexing() throws InterruptedException {
-        indexingThreadMap.clear();
-        log.info("{} {}","Indexing started at",
+        if (!indexingThreadMap.isEmpty()) return new FailResponse(false, "Индексация уже запущена");
+        log.info("{} {}", "Indexing started at",
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd.MM.yyyy")));
-            siteRepository.deleteAll();
+        siteRepository.deleteAll();
         List<Site> siteList = sites.getSites();
-        long time = System.currentTimeMillis();
+        if(saverOrRefresher != null) saverOrRefresher.clearBuffers();
         siteList.forEach(this::startConcurrencyIndexing);
-        do {
-            Thread.sleep(TimeUnit.MILLISECONDS.toMillis(5000));
-        } while (indexingThreadMap.keySet().stream().anyMatch(Thread::isAlive));
-        if(!SiteNode.getPagesBuffer().isEmpty()) {
-            pageRepository.saveAll(SiteNode.getPagesBuffer());
-            SiteNode.clearPagesBuffer();
-        }
-        if (indexingThreadMap.keySet().stream().allMatch(Thread::isInterrupted)) {
-            setFailedStatus(indexingThreadMap.values());
-            log.info("{} {}","Indexing is interrupted at",
-                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd.MM.yyyy")));
-            return new Response(false, "Индексация прервана");
-        }
-        log.info("{} {}(for {})","Pages are loaded at",
-            LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd.MM.yyyy")),
-            (System.currentTimeMillis() - time) / 1000);
-        indexingThreadMap.keySet().stream().filter(Thread::isInterrupted).forEach(e -> {
-            searchengine.model.entities.Site site = indexingThreadMap.get(e);
-            site.setStatus(EnumStatus.FAILED);
-            site.setStatusTime(LocalDateTime.now());
-            site.setLastError("Индексация прервана");
-            siteRepository.save(site);
-        });
-        Map<Thread, searchengine.model.entities.Site> doneCorrectlyMap = new HashMap<>();
-        indexingThreadMap.keySet().stream().filter(thread ->
-                !thread.isInterrupted()).forEach(t -> doneCorrectlyMap.put(t, indexingThreadMap.get(t)));
-        indexingThreadMap.clear();
-        return lemmatization(doneCorrectlyMap);
-    }
-
-    private Response lemmatization(Map<Thread,
-            searchengine.model.entities.Site> doneCorrectlyMap) throws InterruptedException {
-        List<searchengine.model.entities.Site> actualSitesList = siteRepository.findAll();
-        double timeStamp = System.currentTimeMillis();
-        saverOrRefresher = SaverOrRefresher.getInstance(lemmaRepository, indexesRepository);
-
-        actualSitesList.stream().filter(s -> s.getStatus().equals(EnumStatus.INDEXING))
-                .forEach(s ->  {
-                    List<Page> pageList = pageRepository.findPageBySiteId(s.getId());
-                    Thread thread = new Thread(new LemmaIndexer
-                            (s, saverOrRefresher, pageList));
-                    thread.start();
-                    threads.add(thread);
-                });
-        while(threads.stream().anyMatch(Thread::isAlive))
-            Thread.sleep(3000);
-        if(saverOrRefresher.isInterrupted) return getFailedResponse(doneCorrectlyMap);
-        log.info("{} {}(for {})","Indexing is over at ",
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd.MM.yyyy")),
-                (System.currentTimeMillis() - timeStamp) / 1000);
-        doneCorrectlyMap.values().forEach(site -> {
-            site.setStatusTime(LocalDateTime.now());
-            site.setStatus(EnumStatus.INDEXED);
-            siteRepository.save(site);
-        });
-        return new Response(true, "");
-    }
-
-    @Override
-    public Response stopIndexing() {
-        if(!indexingThreadMap.isEmpty() && indexingThreadMap.keySet().stream().anyMatch(t -> !t.isAlive()))
-            return new Response(false, "Индексация не запускалась");
-        else if(indexingThreadMap.keySet().stream().anyMatch(Thread::isAlive)) {
-            indexingThreadMap.keySet().forEach(t -> t.getPool().shutdownNow());
-            indexingThreadMap.keySet().forEach(Thread::interrupt);
-            return new Response(true, "");
-        }
-        else if (!threads.isEmpty()) {
-            saverOrRefresher.isInterrupted = true;
-            threads.clear();
-            return new Response(true, "");
-        }
-        return new Response(false, "Индексация не запускалась");
-    }
-
-    private Response getFailedResponse (Map<Thread, searchengine.model.entities.Site> doneCorrectlyMap) {
-        saverOrRefresher.isInterrupted = false;
-        setFailedStatus(doneCorrectlyMap.values());
-        log.info("{} {}","Indexing is interrupted at ",
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd.MM.yyyy")));
-        return new Response(false, "Индексация прервана");
-    }
-
-    private void setFailedStatus(Collection<searchengine.model.entities.Site> failedSitesSet) {
-        failedSitesSet.forEach(site -> {
-            site.setLastError("Индексация прервана");
-            site.setStatusTime(LocalDateTime.now());
-            site.setStatus(EnumStatus.FAILED);
-        });
-        siteRepository.saveAll(failedSitesSet);
+        Thread indexing = new Indexing();
+        indexing.start();
+        return new Response(true);
     }
 
     private void startConcurrencyIndexing(Site configSite) {
@@ -146,8 +64,94 @@ public class StartIndexingServiceImpl implements StartIndexingService {
         site.setLastError("");
         siteRepository.save(site);
         SiteIndexer pagesIndexingThread
-                = new SiteIndexer(site.getUrl(), site, pageRepository, siteRepository);
+                = new SiteIndexer(site.getUrl(), site, pageRepository, siteRepository, userAgent, referrer);
         pagesIndexingThread.start();
         indexingThreadMap.put(pagesIndexingThread, site);
+    }
+    @Override
+    public Response stopIndexing() {
+        if(indexingThreadMap.keySet().stream().anyMatch(Thread::isAlive)) {
+            indexingThreadMap.keySet().forEach(t -> t.getPool().shutdownNow());
+            indexingThreadMap.keySet().forEach(Thread::interrupt);
+            return new Response(true);
+        }
+        else {
+            saverOrRefresher.isInterrupted = true;
+            return new Response(true);
+        }
+    }
+
+
+
+    class Indexing extends Thread {
+        @Override
+        public void run() {
+            long time = System.currentTimeMillis();
+            do {
+                try {
+                    Thread.sleep(TimeUnit.MILLISECONDS.toMillis(5000));
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            } while (indexingThreadMap.keySet().stream().anyMatch(Thread::isAlive));
+            if (!SiteNode.getPagesBuffer().isEmpty()) {
+                pageRepository.saveAll(SiteNode.getPagesBuffer());
+                SiteNode.clearPagesBuffer();
+            }
+            if (indexingThreadMap.keySet().stream().allMatch(Thread::isInterrupted)) {
+                getFailedResponse(indexingThreadMap);
+                indexingThreadMap.clear();
+            } else {
+                log.info("{} {}(for {})", "Pages are loaded at",
+                        LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd.MM.yyyy")),
+                        (System.currentTimeMillis() - time) / 1000);
+                try {
+                    lemmatization();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+        private void getFailedResponse (Map<SiteIndexer, searchengine.model.entities.Site> indexerSiteMap) {
+            if(saverOrRefresher != null) saverOrRefresher.isInterrupted = false;
+            indexerSiteMap.values().forEach(site -> {
+                site.setLastError("Индексация прервана");
+                site.setStatusTime(LocalDateTime.now());
+                site.setStatus(EnumStatus.FAILED);
+            });
+            siteRepository.saveAll(indexerSiteMap.values());
+            log.info("{} {}","Indexing is interrupted at ",
+                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd.MM.yyyy")));
+        }
+        private void lemmatization() throws InterruptedException {
+            List<searchengine.model.entities.Site> actualSitesList = siteRepository.findAll();
+            double timeStamp = System.currentTimeMillis();
+            saverOrRefresher = SaverOrRefresher.getInstance(lemmaRepository, indexesRepository);
+            actualSitesList.stream().filter(s -> s.getStatus().equals(EnumStatus.INDEXING))
+                    .forEach(s ->  {
+                        List<Page> pageList = pageRepository.findPageBySiteId(s.getId());
+                        Thread thread = new Thread(new LemmaIndexer
+                                (s, saverOrRefresher, pageList));
+                        thread.start();
+                        threads.add(thread);
+                    });
+            while(threads.stream().anyMatch(Thread::isAlive))
+                Thread.sleep(3000);
+            if(saverOrRefresher.isInterrupted) {
+                getFailedResponse(indexingThreadMap);
+            } else {
+                log.info("{} {}(for {})", "Indexing is over at ",
+                        LocalDateTime.now().format(DateTimeFormatter
+                                .ofPattern("HH:mm:ss dd.MM.yyyy")),
+                        (System.currentTimeMillis() - timeStamp) / 1000);
+                indexingThreadMap.values().forEach(site -> {
+                    site.setStatusTime(LocalDateTime.now());
+                    site.setStatus(EnumStatus.INDEXED);
+                    siteRepository.save(site);
+                });
+            }
+            indexingThreadMap.clear();
+            threads.clear();
+        }
     }
 }

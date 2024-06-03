@@ -1,11 +1,10 @@
-package searchengine.utils.search;
+package searchengine.dto.search;
 
-import lombok.Data;
 import lombok.Getter;
 
-@Data
+@lombok.Data
 @Getter
-public class SearchResultData implements Comparable<SearchResultData> {
+public class Data implements Comparable<Data> {
     private String site;
     private String siteName;
     private String uri;
@@ -14,7 +13,7 @@ public class SearchResultData implements Comparable<SearchResultData> {
     private Float relevance;
 
     @Override
-    public int compareTo(SearchResultData o) {
+    public int compareTo(Data o) {
         return o.relevance.compareTo(relevance);
     }
 }

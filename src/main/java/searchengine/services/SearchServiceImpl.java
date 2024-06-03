@@ -8,20 +8,20 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
+import searchengine.dto.Response;
 import searchengine.utils.startIndexing.LemmaCollector;
-import searchengine.utils.Response;
+import searchengine.dto.FailResponse;
 import searchengine.model.entities.Lemma;
 import searchengine.model.entities.Page;
 import searchengine.model.entities.Site;
 import searchengine.model.repositories.LemmaRepository;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
-import searchengine.utils.search.Relevance;
-import searchengine.utils.search.SearchResponse;
-import searchengine.utils.search.SearchResultData;
-import searchengine.utils.search.Snippet;
+import searchengine.dto.search.Relevance;
+import searchengine.dto.search.SearchResponse;
+import searchengine.dto.search.Data;
+import searchengine.dto.search.Snippet;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.stream.Collectors;
 
 
@@ -33,7 +33,7 @@ public class SearchServiceImpl implements SearchService {
     private final PageRepository pageRepository;
     private final LemmaCollector lemmaCollector = new LemmaCollector();
     private final Set<SearchResponse> containedMatchesResponses;
-    private final Set<Response> doNotContainedMatchesResponses;
+    private final Set<Response> doNotContainedMatchesResponse;
     private int siteId = 0;
 
     public SearchServiceImpl(LemmaRepository lemmaRepository, SiteRepository siteRepository, PageRepository pageRepository) {
@@ -41,7 +41,7 @@ public class SearchServiceImpl implements SearchService {
         this.siteRepository = siteRepository;
         this.pageRepository = pageRepository;
         containedMatchesResponses = new HashSet<>();
-        doNotContainedMatchesResponses = new HashSet<>();
+        doNotContainedMatchesResponse = new HashSet<>();
     }
 
 
@@ -50,12 +50,12 @@ public class SearchServiceImpl implements SearchService {
         if(offset == null) offset = 0;
         if (limit == null) limit = 0;
         if (query == null)
-            return new Response(false, "Задан пустой " +
+            return new FailResponse(false, "Задан пустой " +
                     "поисковый запрос");
         lemmaCollector.clearMap();
         Set<String> lemmasFromQuerySet = lemmaCollector.collectLemmas(query).keySet();
         if (siteRepository.findAll().isEmpty())
-            return new Response(false, "Отсутствует индекс сайта. " +
+            return new FailResponse(false, "Отсутствует индекс сайта. " +
                     "Необходимо провести индексацию");
         if (site == null) {
             List<Site> siteList = siteRepository.findAll();
@@ -65,62 +65,62 @@ public class SearchServiceImpl implements SearchService {
                         (lemmasFromQuerySet, s.getUrl(), finalLimit);
                 if(responseClass.getIsContainsMatches())
                     containedMatchesResponses.add((SearchResponse) responseClass.getResponse());
-                else doNotContainedMatchesResponses.add(responseClass.getResponse());
+                else doNotContainedMatchesResponse.add(responseClass.getResponse());
             });
-            if(doNotContainedMatchesResponses.isEmpty()) {
+            if(doNotContainedMatchesResponse.isEmpty()) {
                 int count = containedMatchesResponses.stream().map(SearchResponse::getCount)
                         .reduce(Integer::sum).get();
-                Set<SearchResultData> commonSearchResultData = new TreeSet<>();
-                containedMatchesResponses.stream().filter(r -> r.getSearchResultData() != null)
-                        .forEach(r -> commonSearchResultData.addAll(r.getSearchResultData()));
+                Set<Data> commonData = new TreeSet<>();
+                containedMatchesResponses.stream().filter(r -> r.getData() != null)
+                        .forEach(r -> commonData.addAll(r.getData()));
                 SearchResponse searchResponse =
-                        new SearchResponse(true, "", count, commonSearchResultData);
-                searchResponse.setSearchResultData(getPartOfData
-                        (searchResponse.getSearchResultData(), offset, limit));
+                        new SearchResponse(true, count, commonData);
+                searchResponse.setData(getPartOfData
+                        (searchResponse.getData(), offset, limit));
                 clearMemory();
                 return isFoundTooManyPages(searchResponse, limit);
             } else if(!containedMatchesResponses.isEmpty()) {
                 int count = containedMatchesResponses.stream().map(SearchResponse::getCount).
                     reduce(Integer::sum).get();
-                Set<SearchResultData> commonSearchResultData = new TreeSet<>();
-                containedMatchesResponses.stream().filter(r -> r.getSearchResultData() != null)
-                    .forEach(r -> commonSearchResultData.addAll(r.getSearchResultData()));
+                Set<Data> commonData = new TreeSet<>();
+                containedMatchesResponses.stream().filter(r -> r.getData() != null)
+                    .forEach(r -> commonData.addAll(r.getData()));
                 SearchResponse searchResponse =
-                        new SearchResponse(true, "", count, commonSearchResultData);
-                searchResponse.setSearchResultData(getPartOfData
-                        (searchResponse.getSearchResultData(), offset, limit));
+                        new SearchResponse(true, count, commonData);
+                searchResponse.setData(getPartOfData
+                        (searchResponse.getData(), offset, limit));
                 clearMemory();
                 return isFoundTooManyPages(searchResponse, limit);
             } else {
-                return doNotContainedMatchesResponses.stream().findFirst().get();
+                return doNotContainedMatchesResponse.stream().findFirst().get();
             }
         } else {
             if (siteRepository.findSiteByUrl(site).isEmpty()) {
                 clearMemory();
-                return new Response(false
+                return new FailResponse(false
                         , "Указанный сайт не найден");
             }
             SearchResponse searchResponse = (SearchResponse)
                     countRelevanceAndGetResponse(lemmasFromQuerySet, site, limit).getResponse();
-            if(searchResponse.getSearchResultData() == null) {
+            if(searchResponse.getData() == null) {
                 clearMemory();
                 return searchResponse;
             }
-            searchResponse.setSearchResultData(getPartOfData(searchResponse.getSearchResultData(), offset, limit));
+            searchResponse.setData(getPartOfData(searchResponse.getData(), offset, limit));
             clearMemory();
                 return isFoundTooManyPages(searchResponse, limit);
         }
     }
 
     private void clearMemory() {
-        doNotContainedMatchesResponses.clear();
+        doNotContainedMatchesResponse.clear();
         containedMatchesResponses.clear();
     }
 
 
     private Response isFoundTooManyPages(SearchResponse searchResponse, Integer limit) {
-        if(searchResponse.getSearchResultData().size() > 50 && (limit > 50 || limit == 0)) {
-            return new Response(false,
+        if(searchResponse.getData().size() > 50 && (limit > 50 || limit == 0)) {
+            return new FailResponse(false,
                     "Найдено слишком много страниц. " +
                             "Уточните запрос или укажите значение limit (не более 50)");
         } else return searchResponse;
@@ -133,7 +133,14 @@ public class SearchServiceImpl implements SearchService {
 
         @Override
         public int compareTo(ResponseClass o) {
-            return Integer.compare(this.response.getError().length(), o.response.getError().length());
+            if (response.result && o.response.result) return 0;
+            else if(response.result) return -1;
+            else if(o.response.result) return 1;
+            else {
+                FailResponse failResponse1 = (FailResponse) response;
+                FailResponse failResponse2 = (FailResponse) o.response;
+                return Integer.compare(failResponse1.getError().length(), failResponse2.getError().length());
+            }
         }
     }
 
@@ -143,7 +150,7 @@ public class SearchServiceImpl implements SearchService {
         Set<Lemma> lemmas = new TreeSet<>();
         Optional<Site> siteEntity = siteRepository.findSiteByUrl(site);
         if(siteEntity.isEmpty())
-            return new ResponseClass(new Response(false
+            return new ResponseClass(new FailResponse(false
                     , "Указанный сайт не найден"), false);
         siteId = siteEntity.get().getId();
         for (String s : lemmasFromQuerySet) {
@@ -152,7 +159,7 @@ public class SearchServiceImpl implements SearchService {
             optionalLemma.ifPresent(lemmas::add);
         }
         if(lemmas.size() != lemmasFromQuerySet.size())
-            return new ResponseClass(new SearchResponse(true, "",
+            return new ResponseClass(new SearchResponse(true,
                     0, null), true);
         Set<Page> pageSet = new HashSet<>();
         Optional<Lemma> lemma = lemmas.stream().filter(lemma1 ->
@@ -167,21 +174,21 @@ public class SearchServiceImpl implements SearchService {
             return isContains;
         }).toList();
         if(pages.isEmpty())
-            return new ResponseClass(new SearchResponse(true, "", 0, null), true);
+            return new ResponseClass(new SearchResponse(true, 0, null), true);
         pageSet.clear();
         Map<Page, Float> relativeRelevance =
                         Relevance.getRelativeRelevance(pages, pageRepository, siteId, limit);
         if(!relativeRelevance.isEmpty())
             return new ResponseClass(setResponse(relativeRelevance
                     , lemmasFromQuerySet), true);
-        else return new ResponseClass(new Response(false,
+        else return new ResponseClass(new FailResponse(false,
             "Найдено слишком много страниц. " +
             "Уточните запрос или укажите значение limit (не более 50)"), false);
     }
 
     private SearchResponse setResponse(Map<Page, Float> relativeRelevance
                                         , Set<String> queryWords) {
-        Set<SearchResultData> searchResultDataSet = new TreeSet<>();
+        Set<Data> dataSet = new TreeSet<>();
         relativeRelevance.keySet().forEach(p -> {
             Document document = Jsoup.parse(p.getContent());
             Elements elements = document.body().getAllElements();
@@ -224,25 +231,25 @@ public class SearchServiceImpl implements SearchService {
                     snippets.addAll(getSnippets(words, wordsOfElementContainedInQuery, e));
                 }
             });
-            searchResultDataSet.add(getSearchResultData(snippets
+            dataSet.add(getSearchResultData(snippets
                 , relativeRelevance, p, document, queryWords));
         });
-        return new SearchResponse(true, "",
-                relativeRelevance.size(), searchResultDataSet);
+        return new SearchResponse(true,
+                relativeRelevance.size(), dataSet);
     }
 
-    private SearchResultData getSearchResultData(TreeSet<Snippet> snippets
+    private Data getSearchResultData(TreeSet<Snippet> snippets
             , Map<Page, Float> relativeRelevance, Page p, Document document
             , Set<String> queryWords) {
         List<Snippet> snippetList = new ArrayList<>(snippets);
-        SearchResultData searchResultData = new SearchResultData();
-        searchResultData.setRelevance(relativeRelevance.get(p));
-        searchResultData.setSite(p.getSite().getUrl());
-        searchResultData.setSiteName(p.getSite().getName());
-        searchResultData.setUri(p.getPath());
-        searchResultData.setTitle(document.title());
-        searchResultData.setSnippet(limitNumberOfSnippets(snippetList, queryWords));
-        return searchResultData;
+        Data data = new Data();
+        data.setRelevance(relativeRelevance.get(p));
+        data.setSite(p.getSite().getUrl());
+        data.setSiteName(p.getSite().getName());
+        data.setUri(p.getPath());
+        data.setTitle(document.title());
+        data.setSnippet(limitNumberOfSnippets(snippetList, queryWords));
+        return data;
     }
 
     private StringBuilder limitNumberOfSnippets(List<Snippet> snippetList, Set<String> queryWords) {
@@ -259,14 +266,14 @@ public class SearchServiceImpl implements SearchService {
         return snippetStrings;
     }
 
-    private Set<SearchResultData> getPartOfData(Set<SearchResultData> searchResultData,
-                                                int offset, int limit) {
-        List<SearchResultData> subList = searchResultData.stream()
-                .toList().subList(offset < searchResultData.size() ? offset : 0
-                        , searchResultData.size());
+    private Set<Data> getPartOfData(Set<Data> data,
+                                    int offset, int limit) {
+        List<Data> subList = data.stream()
+                .toList().subList(offset < data.size() ? offset : 0
+                        , data.size());
         if (limit == 0) return new TreeSet<>(subList);
         else {
-            return subList.stream().limit(Math.min(limit, searchResultData.size()))
+            return subList.stream().limit(Math.min(limit, data.size()))
                     .collect(Collectors.toCollection(TreeSet::new));
         }
     }

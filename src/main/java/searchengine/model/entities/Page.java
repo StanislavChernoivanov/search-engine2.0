@@ -19,7 +19,7 @@ public class Page implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(nullable = false, foreignKey = @ForeignKey(name = "FK_site_index"), name = "site_id")
     @EqualsAndHashCode.Include
     private Site site;

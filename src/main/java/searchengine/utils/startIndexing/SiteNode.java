@@ -2,7 +2,6 @@ package searchengine.utils.startIndexing;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import org.jsoup.Connection;
-import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import searchengine.model.entities.Page;
@@ -29,6 +28,8 @@ public class SiteNode implements Comparable<SiteNode> {
     private static Set<Page> pageBuffer;
     private Connection connection;
     private final SiteRepository siteRepository;
+    private final String userAgent;
+    private final String referrer;
 
     static {
         pageBuffer = new CopyOnWriteArraySet<>();
@@ -37,12 +38,14 @@ public class SiteNode implements Comparable<SiteNode> {
     public SiteNode(URL url,
                     PageRepository pageRepository,
                     Site site,
-                    SiteRepository siteRepository) throws IOException {
+                    SiteRepository siteRepository, String referrer, String userAgent) throws IOException {
 
         this.pageRepository = pageRepository;
         this.site = site;
         this.url = url;
         this.siteRepository = siteRepository;
+        this.userAgent = userAgent;
+        this.referrer = referrer;
         createAndSavePage();
     }
 
@@ -52,9 +55,7 @@ public class SiteNode implements Comparable<SiteNode> {
         Page page = new Page();
         try {
             connection = Jsoup.connect(url.toString())
-                    .userAgent("Mozilla/5.0 (Windows; U; WindowsNT" +
-                            " 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
-                    .referrer("http://www.google.com")
+                    .userAgent(userAgent).referrer(referrer)
                     .ignoreContentType(true).maxBodySize(0).timeout(20_000);
             response = connection.execute();
             doc = response.parse();

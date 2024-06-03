@@ -1,4 +1,4 @@
-package searchengine.utils.search;
+package searchengine.dto.search;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import searchengine.model.entities.Page;

@@ -21,12 +21,15 @@ public class SiteIndexer extends Thread {
     @Getter
     private ForkJoinPool pool;
 
+    private final String userAgent;
+    private final String referrer;
+
     @Override
     public void run() {
         SiteParser parser;
         pool = new ForkJoinPool();
         try {
-            parser = new SiteParser(new URL(url), site, repository, siteRepository);
+            parser = new SiteParser(new URL(url), site, repository, siteRepository, userAgent, referrer);
             pool.invoke(parser);
         } catch (MalformedURLException e) {
             log.error("{}\n{}", e.getMessage(), e.getStackTrace());

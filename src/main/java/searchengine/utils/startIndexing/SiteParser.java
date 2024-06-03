@@ -8,6 +8,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
 import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
@@ -25,23 +26,27 @@ public class SiteParser extends RecursiveTask<SiteNode> {
     private final URL url;
     private final String host;
     private final Site site;
+    @Autowired
     private final PageRepository pageRepository;
     private final SiteRepository siteRepository;
+    private final String userAgent;
+    private final String referrer;
 
-
-    public SiteParser(URL url, Site site, PageRepository pageRepository, SiteRepository siteRepository) {
+    public SiteParser(URL url, Site site, PageRepository pageRepository
+            , SiteRepository siteRepository, String userAgent, String referrer) {
         this.site = site;
         this.pageRepository = pageRepository;
         this.url = url;
         host = url.getHost().replaceAll("www\\.", "");
         this.siteRepository = siteRepository;
+        this.userAgent = userAgent;
+        this.referrer = referrer;
     }
 
     private Set<String> getChildes(URL parent) {
         Set<String> childes = new TreeSet<>();
-        Connection connection = Jsoup.connect(parent.toString()).userAgent("Mozilla/5.0 (Windows; U; WindowsNT" +
-                        " 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6")
-                .referrer("http://www.google.com").maxBodySize(0).timeout(20_000);
+        Connection connection = Jsoup.connect(parent.toString()).userAgent(userAgent)
+                .referrer(referrer).maxBodySize(0).timeout(20_000);
         try {
             Thread.sleep((long) (Math.random() * 50 + 100));
             Document doc = connection.ignoreContentType(true).get();
@@ -74,14 +79,14 @@ public class SiteParser extends RecursiveTask<SiteNode> {
         Set<String> childes = getChildes(url);
         if (childes.isEmpty()) {
             try {
-                return new SiteNode(url, pageRepository, site, siteRepository);
+                return new SiteNode(url, pageRepository, site, siteRepository, referrer, userAgent);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         } else {
             SiteNode node = null;
             try {
-                node = new SiteNode(url, pageRepository, site, siteRepository);
+                node = new SiteNode(url, pageRepository, site, siteRepository, referrer, userAgent);
             } catch (ConnectException ex) {
                 LOGGER.info("{} - {}", url.toString(), ex.getMessage());
             }
@@ -111,7 +116,8 @@ public class SiteParser extends RecursiveTask<SiteNode> {
             SiteParser task = null;
             try {
                 task = new SiteParser
-                                (new URL(child), site, pageRepository, siteRepository);
+                                (new URL(child), site, pageRepository
+                                        , siteRepository, userAgent, referrer);
             } catch (MalformedURLException ignored) {}
             try {
                 assert task != null;

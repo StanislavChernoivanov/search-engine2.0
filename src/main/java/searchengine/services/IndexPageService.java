@@ -1,11 +1,10 @@
 package searchengine.services;
 
-import searchengine.utils.Response;
+import searchengine.dto.Response;
 
 import java.io.IOException;
-import java.net.URL;
 
 public interface IndexPageService {
 
-    Response indexPage(URL url) throws IOException, InterruptedException;
+    Response indexPage(String url) throws IOException, InterruptedException;
 }

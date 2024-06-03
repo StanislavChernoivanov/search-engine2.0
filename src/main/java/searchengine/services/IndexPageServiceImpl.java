@@ -5,8 +5,9 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.stereotype.Service;
 import searchengine.config.SitesList;
+import searchengine.dto.Response;
 import searchengine.utils.startIndexing.LemmaIndexer;
-import searchengine.utils.Response;
+import searchengine.dto.FailResponse;
 import searchengine.model.entities.*;
 import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.LemmaRepository;
@@ -15,6 +16,7 @@ import searchengine.model.repositories.SiteRepository;
 import searchengine.utils.startIndexing.SaverOrRefresher;
 
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
 
@@ -48,8 +50,15 @@ public class IndexPageServiceImpl  implements IndexPageService{
 
 
     @Override
-    public Response indexPage(URL url) throws InterruptedException {
-        Response response = new Response(true, "");
+    public Response indexPage(String urlStr) throws InterruptedException {
+        URL url;
+        try {
+            url = new URL(urlStr);
+        } catch (MalformedURLException e) {
+            return new FailResponse(false, "Данная страница находится за пределами сайтов, " +
+                    "указанных в конфигурационном файле");
+        }
+        Response response = new Response(true);
         Optional<Page> optionalPage = Optional.ofNullable(pageRepository.findPageByPath(url.getPath()));
         if (optionalPage.isPresent()) {
             Page outdatedPage = optionalPage.get();
@@ -74,13 +83,13 @@ public class IndexPageServiceImpl  implements IndexPageService{
             pageRepository.delete(outdatedPage);
             indexList.clear();
             if(!indexPageIfPageExist(url, site))
-                return new Response(false, "Отсутствует соединение с данной страницей");
+                return new FailResponse(false, "Отсутствует соединение с данной страницей");
         } else {
             List<searchengine.config.Site> siteList = sites.getSites();
             Optional<searchengine.config.Site> isSiteExist = siteList.stream().filter(s ->
                     s.getUrl().contains(url.getHost())).findFirst();
             if (isSiteExist.isEmpty())
-                return new Response(false, "Данная страница находится за пределами сайтов, " +
+                return new FailResponse(false, "Данная страница находится за пределами сайтов, " +
                         "указанных в конфигурационном файле");
             else {
                 Optional<Site> optionalSite = siteRepository.findSiteByUrl(isSiteExist.get().getUrl());
@@ -94,7 +103,7 @@ public class IndexPageServiceImpl  implements IndexPageService{
                 }
                 else siteModel = optionalSite.get();
                 if (!indexPageIfPageExist(url, siteModel)) {
-                    return new Response(false, "Отсутствует соединение с данной страницей");
+                    return new FailResponse(false, "Отсутствует соединение с данной страницей");
                 } else {
                     indexPageIfPageExist(url, siteRepository.findSiteByUrl(isSiteExist.get().getUrl()).get());
                 }

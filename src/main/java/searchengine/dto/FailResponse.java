@@ -1,4 +1,4 @@
-package searchengine.utils;
+package searchengine.dto;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -7,8 +7,9 @@ import lombok.ToString;
 @Getter
 @Setter
 @ToString
-public class Response {
-    public Response(boolean result, String error) {
+public class FailResponse extends Response {
+    public FailResponse(boolean result, String error) {
+        super(result);
         this.result = result;
         this.error = error;
     }
