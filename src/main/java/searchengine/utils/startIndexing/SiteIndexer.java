@@ -6,6 +6,7 @@ import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.util.concurrent.ForkJoinPool;
 
@@ -13,7 +14,7 @@ import java.util.concurrent.ForkJoinPool;
 @RequiredArgsConstructor
 @Log4j2
 public class SiteIndexer extends Thread {
-    private final String url;
+    private final String urlStr;
     @Getter
     private final Site site;
     private final PageRepository repository;
@@ -28,12 +29,21 @@ public class SiteIndexer extends Thread {
     public void run() {
         SiteParser parser;
         pool = new ForkJoinPool();
+        URL url = null;
         try {
-            parser = new SiteParser(new URL(url), site, repository, siteRepository, userAgent, referrer);
+            url = new URI(urlStr).toURL();
+            parser = new SiteParser(url,
+                    site, repository, siteRepository, userAgent, referrer);
             pool.invoke(parser);
-        } catch (MalformedURLException e) {
-            log.error("{}\n{}", e.getMessage(), e.getStackTrace());
+        } catch (Exception e) {
+            log.error("{}\n{}\n{}", e.getClass().getSimpleName(), e.getMessage(), e.getStackTrace());
+        } finally {
+            assert url != null;
+            SiteParser.clearBuffer();
         }
     }
+
+
+
 }
 

@@ -1,14 +1,15 @@
 indexing-settings:
   sites:
-    - url: https://lenta.ru/
-      name: Lenta
+#    - url: https://lenta.ru/
+#      name: Lenta
 #    - url: https://skillbox.ru
 #      name: Skillbox
-#    - url: https://dimonvideo.ru
+#    - url: https://dimonvideo.ru/
 #      name: Dimonvideo
+    - url: https://www.svetlovka.ru/
+      name: Svetlovka
     - url: https://playback.ru/
       name: PlayBack
-
 
 
 spring:

@@ -2,6 +2,8 @@ package searchengine.model.entities;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
+
 import javax.persistence.*;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -24,12 +26,17 @@ public class Page implements Serializable {
     @EqualsAndHashCode.Include
     private Site site;
     @EqualsAndHashCode.Include
-    @Column(length = 500)
+    @Column(length = 700)
     private String path;
     private int code;
-    @Column(columnDefinition = "MEDIUMTEXT")
+    @Column(columnDefinition = "LONGTEXT")
     private String content;
     @OneToMany(mappedBy = "page", cascade = CascadeType.REMOVE)
     private List<Indexes> indexList = new ArrayList<>();
+
+
+    public double getMemorySize() {
+        return (path.length() * 2D + content.length() * 2D) / 1048576;
+    }
 
 }

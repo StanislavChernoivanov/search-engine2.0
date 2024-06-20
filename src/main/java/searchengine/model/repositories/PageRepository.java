@@ -12,6 +12,10 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
     @Query("select p from Page p where p.path = :path")
     Page findPageByPath(@Param("path") String path);
 
+    @Query("select p.path from Page p where p.path in (:path)")
+    List<String> findPageByManyPaths(@Param("path") List<String> paths);
+
+
     @Query(value = "SELECT count(*) FROM pages", nativeQuery = true)
     int getCountPages();
 
