@@ -13,9 +13,9 @@ public class SearchResponse extends Response {
     private final boolean result;
 
     @Setter
-    private Set<Data> data;
+    private Set<SearchData> data;
 
-    public SearchResponse(boolean result, int count, Set<Data> data) {
+    public SearchResponse(boolean result, int count, Set<SearchData> data) {
         super(result);
         this.result = result;
         this.count = count;

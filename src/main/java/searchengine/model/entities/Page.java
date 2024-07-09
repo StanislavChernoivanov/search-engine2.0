@@ -26,7 +26,7 @@ public class Page implements Serializable {
     @EqualsAndHashCode.Include
     private Site site;
     @EqualsAndHashCode.Include
-    @Column(length = 700)
+    @Column(length = 767)
     private String path;
     private int code;
     @Column(columnDefinition = "LONGTEXT")

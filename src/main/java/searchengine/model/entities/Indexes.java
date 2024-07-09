@@ -16,11 +16,11 @@ public class Indexes implements Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
-    @ManyToOne()
+    @ManyToOne
     @JoinColumn(foreignKey=@ForeignKey(name = "FK_index_page"), name = "page_id")
     @EqualsAndHashCode.Include
     private Page page;
-    @ManyToOne()
+    @ManyToOne
     @JoinColumn(foreignKey=@ForeignKey(name = "FK_index_lemma"), name = "lemma_id")
     @EqualsAndHashCode.Include
     private Lemma lemma;

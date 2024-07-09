@@ -1,15 +1,15 @@
 indexing-settings:
   sites:
-#    - url: https://lenta.ru/
-#      name: Lenta
-#    - url: https://skillbox.ru
-#      name: Skillbox
-#    - url: https://dimonvideo.ru/
-#      name: Dimonvideo
+
     - url: https://www.svetlovka.ru/
       name: Svetlovka
     - url: https://playback.ru/
       name: PlayBack
+    - url: https://www.m.samarabeer.ru/
+      name: SamaraBeer
+    - url: https://samara.lada.ru/
+      name: SamaraLada
+
 
 
 spring:
@@ -30,3 +30,7 @@ spring:
 connection-properties:
   userAgent: Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6
   referrer: http://www.google.com
+
+logging:
+  level:
+    ROOT: INFO

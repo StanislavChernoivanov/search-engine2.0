@@ -18,4 +18,5 @@ public interface SiteRepository extends JpaRepository<Site, Integer> {
 
     @Query(value = "SELECT count(*) FROM sites", nativeQuery = true)
     int getCountSites();
+
 }

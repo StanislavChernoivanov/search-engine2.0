@@ -6,8 +6,6 @@ import searchengine.model.entities.Indexes;
 import searchengine.model.entities.Lemma;
 import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.LemmaRepository;
-
-import java.time.LocalDateTime;
 import java.util.*;
 
 @Log4j2
@@ -46,10 +44,8 @@ public class SaverOrRefresher {
         if (isInterrupted) {
             lemmaBuffer.clear();
             indexBuffer.clear();
-            log.info("Поток индексации - {} прерван", Thread.currentThread().getName());
-            throw new InterruptIndexingException("Indexing thread - "
-                    + Thread.currentThread().getName() + " is interrupted at "
-                    + LocalDateTime.now(), null, true, false);
+            log.debug("Indexing thread - {} is interrupted", Thread.currentThread().getName());
+            Thread.currentThread().interrupt();
         }
         if (lemmaBuffer.size() >= 300) {
             try {
@@ -83,13 +79,5 @@ public class SaverOrRefresher {
 
     synchronized Optional<Lemma> checkBuffer(String key) {
         return lemmaBuffer.stream().filter(l -> l.getLemma().equals(key)).findFirst();
-    }
-
-    static class InterruptIndexingException extends RuntimeException {
-        public InterruptIndexingException(String message, Throwable cause,
-                                          boolean enableSuppression,
-                                          boolean writableStackTrace) {
-            super(message, cause, enableSuppression, writableStackTrace);
-        }
     }
 }

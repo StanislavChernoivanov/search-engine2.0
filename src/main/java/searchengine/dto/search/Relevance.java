@@ -2,6 +2,7 @@ package searchengine.dto.search;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import searchengine.model.entities.Page;
+import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.PageRepository;
 import java.util.*;
 
@@ -10,9 +11,9 @@ import java.util.*;
 public class Relevance {
 
     public static Map<Page, Float> getRelativeRelevance(List<Page> pages
-            , PageRepository pageRepository, int siteId, int limit) {
+            , PageRepository pageRepository, int siteId, int limit, IndexesRepository indexesRepository) {
         Map<Page, Float> absoluteRelevanceMap = getAbsoluteRelevance(pages
-                , pageRepository, siteId);
+                , pageRepository, siteId, indexesRepository);
         Optional<Float> max = absoluteRelevanceMap.values().stream().
                 max((Float::compareTo));
         if (max.isPresent()) {
@@ -28,17 +29,14 @@ public class Relevance {
     }
 
     public static Map<Page, Float> getAbsoluteRelevance(List<Page> pages
-            , PageRepository pageRepository, int siteId) {
+            , PageRepository pageRepository, int siteId, IndexesRepository indexesRepository) {
         Map<Page, Float> absoluteRelevanceMap = new HashMap<>();
         int pagesNumber = pageRepository.findCountPagesBySiteId(siteId);
         pages.forEach(p -> {
-            Optional<Float> sum = p.getIndexList().stream().map(index -> {
-                float commonPercent = (float) index.getLemma().getFrequency() /
-                        pagesNumber * 100;
-                if (commonPercent < 30) return index.getRank();
-                else return 0.0f;
-            }).reduce(Float::sum);
-            sum.ifPresent(aFloat -> absoluteRelevanceMap.put(p, aFloat));
+
+            List<Float> ranks = indexesRepository.findIndexByPageId(p.getId(), pagesNumber);
+            Optional<Float> optRanksSum = ranks.stream().reduce(Float::sum);
+            absoluteRelevanceMap.put(p, optRanksSum.orElse(0.0f));
         });
 
         Map<Page, Float> finalAbsoluteRelevanceMap = new TreeMap<>(Comparator.comparing(absoluteRelevanceMap::get));

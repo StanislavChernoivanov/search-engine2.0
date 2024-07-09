@@ -4,7 +4,7 @@ import lombok.Getter;
 
 @lombok.Data
 @Getter
-public class Data implements Comparable<Data> {
+public class SearchData implements Comparable<SearchData> {
     private String site;
     private String siteName;
     private String uri;
@@ -13,7 +13,7 @@ public class Data implements Comparable<Data> {
     private Float relevance;
 
     @Override
-    public int compareTo(Data o) {
+    public int compareTo(SearchData o) {
         return o.relevance.compareTo(relevance);
     }
 }

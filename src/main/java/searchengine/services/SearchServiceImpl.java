@@ -3,12 +3,14 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.lucene.morphology.WrongCharaterException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Service;
 import searchengine.dto.Response;
+import searchengine.model.repositories.IndexesRepository;
 import searchengine.utils.startIndexing.LemmaCollector;
 import searchengine.dto.FailResponse;
 import searchengine.model.entities.Lemma;
@@ -19,7 +21,7 @@ import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
 import searchengine.dto.search.Relevance;
 import searchengine.dto.search.SearchResponse;
-import searchengine.dto.search.Data;
+import searchengine.dto.search.SearchData;
 import searchengine.dto.search.Snippet;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -31,15 +33,16 @@ public class SearchServiceImpl implements SearchService {
     private final LemmaRepository lemmaRepository;
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
+    private final IndexesRepository indexesRepository;
     private final LemmaCollector lemmaCollector = new LemmaCollector();
     private final Set<SearchResponse> containedMatchesResponses;
-    private final Set<Response> doNotContainedMatchesResponse;
-    private int siteId = 0;
+    private final Set<FailResponse> doNotContainedMatchesResponse;
 
-    public SearchServiceImpl(LemmaRepository lemmaRepository, SiteRepository siteRepository, PageRepository pageRepository) {
+    public SearchServiceImpl(LemmaRepository lemmaRepository, SiteRepository siteRepository, PageRepository pageRepository, IndexesRepository indexesRepository) {
         this.lemmaRepository = lemmaRepository;
         this.siteRepository = siteRepository;
         this.pageRepository = pageRepository;
+        this.indexesRepository = indexesRepository;
         containedMatchesResponses = new HashSet<>();
         doNotContainedMatchesResponse = new HashSet<>();
     }
@@ -50,27 +53,25 @@ public class SearchServiceImpl implements SearchService {
         if(offset == null) offset = 0;
         if (limit == null) limit = 0;
         if (query == null)
-            return new FailResponse(false, "Задан пустой " +
-                    "поисковый запрос");
-        lemmaCollector.clearMap();
+            return new FailResponse(false, "Empty request specified");
+        lemmaCollector.clear();
+        if (siteRepository.getCountSites() == 0)
+            return new FailResponse(false, "No site indexing, need to index");
         Set<String> lemmasFromQuerySet = lemmaCollector.collectLemmas(query).keySet();
-        if (siteRepository.findAll().isEmpty())
-            return new FailResponse(false, "Отсутствует индекс сайта. " +
-                    "Необходимо провести индексацию");
         if (site == null) {
             List<Site> siteList = siteRepository.findAll();
             Integer finalLimit = limit;
             siteList.forEach(s -> {
                 ResponseClass responseClass = countRelevanceAndGetResponse
                         (lemmasFromQuerySet, s.getUrl(), finalLimit);
-                if(responseClass.getIsContainsMatches())
+                if(responseClass.isContainsMatches())
                     containedMatchesResponses.add((SearchResponse) responseClass.getResponse());
-                else doNotContainedMatchesResponse.add(responseClass.getResponse());
+                else doNotContainedMatchesResponse.add((FailResponse) responseClass.getResponse());
             });
             if(doNotContainedMatchesResponse.isEmpty()) {
                 int count = containedMatchesResponses.stream().map(SearchResponse::getCount)
                         .reduce(Integer::sum).get();
-                Set<Data> commonData = new TreeSet<>();
+                Set<SearchData> commonData = new TreeSet<>();
                 containedMatchesResponses.stream().filter(r -> r.getData() != null)
                         .forEach(r -> commonData.addAll(r.getData()));
                 SearchResponse searchResponse =
@@ -78,11 +79,20 @@ public class SearchServiceImpl implements SearchService {
                 searchResponse.setData(getPartOfData
                         (searchResponse.getData(), offset, limit));
                 clearMemory();
-                return isFoundTooManyPages(searchResponse, limit);
+                return limitTooManyPages(searchResponse, limit);
+
+            } else if (doNotContainedMatchesResponse.stream().
+                    anyMatch(response -> response.getError().matches("^[\\w\\s.]+\\([\\w\\s]+\\)$"))) {
+                Response response =  doNotContainedMatchesResponse.stream().
+                        filter(failResponse -> failResponse.getError().
+                                matches("^[\\w\\s.]+\\([\\w\\s]+\\)$")).findFirst().get();
+                clearMemory();
+                return response;
+
             } else if(!containedMatchesResponses.isEmpty()) {
                 int count = containedMatchesResponses.stream().map(SearchResponse::getCount).
                     reduce(Integer::sum).get();
-                Set<Data> commonData = new TreeSet<>();
+                Set<SearchData> commonData = new TreeSet<>();
                 containedMatchesResponses.stream().filter(r -> r.getData() != null)
                     .forEach(r -> commonData.addAll(r.getData()));
                 SearchResponse searchResponse =
@@ -90,7 +100,7 @@ public class SearchServiceImpl implements SearchService {
                 searchResponse.setData(getPartOfData
                         (searchResponse.getData(), offset, limit));
                 clearMemory();
-                return isFoundTooManyPages(searchResponse, limit);
+                return limitTooManyPages(searchResponse, limit);
             } else {
                 return doNotContainedMatchesResponse.stream().findFirst().get();
             }
@@ -98,7 +108,7 @@ public class SearchServiceImpl implements SearchService {
             if (siteRepository.findSiteByUrl(site).isEmpty()) {
                 clearMemory();
                 return new FailResponse(false
-                        , "Указанный сайт не найден");
+                        , "Specified site is not found");
             }
             SearchResponse searchResponse = (SearchResponse)
                     countRelevanceAndGetResponse(lemmasFromQuerySet, site, limit).getResponse();
@@ -108,7 +118,7 @@ public class SearchServiceImpl implements SearchService {
             }
             searchResponse.setData(getPartOfData(searchResponse.getData(), offset, limit));
             clearMemory();
-                return isFoundTooManyPages(searchResponse, limit);
+                return limitTooManyPages(searchResponse, limit);
         }
     }
 
@@ -118,18 +128,22 @@ public class SearchServiceImpl implements SearchService {
     }
 
 
-    private Response isFoundTooManyPages(SearchResponse searchResponse, Integer limit) {
+    private Response limitTooManyPages(SearchResponse searchResponse, Integer limit) {
         if(searchResponse.getData().size() > 50 && (limit > 50 || limit == 0)) {
             return new FailResponse(false,
-                    "Найдено слишком много страниц. " +
-                            "Уточните запрос или укажите значение limit (не более 50)");
+                    "There are too much pages. " +
+                            "Specify the limit value (no more than 50)");
         } else return searchResponse;
     }
     @RequiredArgsConstructor
-    @Getter
     private static class ResponseClass implements Comparable<ResponseClass> {
+        @Getter
         private  final Response response;
         private final Boolean isContainsMatches;
+
+        private boolean isContainsMatches(){
+            return isContainsMatches;
+        }
 
         @Override
         public int compareTo(ResponseClass o) {
@@ -145,31 +159,27 @@ public class SearchServiceImpl implements SearchService {
     }
 
     private ResponseClass countRelevanceAndGetResponse
-                                        (Set<String> lemmasFromQuerySet,
-             String site, int limit) {
-        Set<Lemma> lemmas = new TreeSet<>();
-        Optional<Site> siteEntity = siteRepository.findSiteByUrl(site);
+                                        (Set<String> lemmasFromQuery,
+             String siteUrl, int limit) {
+        Optional<Site> siteEntity = siteRepository.findSiteByUrl(siteUrl);
         if(siteEntity.isEmpty())
             return new ResponseClass(new FailResponse(false
-                    , "Указанный сайт не найден"), false);
-        siteId = siteEntity.get().getId();
-        for (String s : lemmasFromQuerySet) {
-            Optional<Lemma> optionalLemma = Optional.ofNullable
-                    (lemmaRepository.findLemma(s, siteId));
-            optionalLemma.ifPresent(lemmas::add);
-        }
-        if(lemmas.size() != lemmasFromQuerySet.size())
+                    , "Specified site is not found"), false);
+        int siteId = siteEntity.get().getId();
+        Set<Lemma> lemmas = new TreeSet<>(
+                lemmaRepository.findMatchingLemma(lemmasFromQuery.stream().toList(), siteId));
+        if(lemmas.size() != lemmasFromQuery.size())
             return new ResponseClass(new SearchResponse(true,
                     0, null), true);
-        Set<Page> pageSet = new HashSet<>();
-        Optional<Lemma> lemma = lemmas.stream().filter(lemma1 ->
-                lemma1.getSite().getId() == siteId).findFirst();
-        lemma.get().getIndexesList().forEach(i -> pageSet.add(i.getPage()));
+        Optional<Lemma> lemma = lemmas.stream().findFirst();
+        List<Page> pageSet = pageRepository.findPagesByLemma(lemma.get().getId());
         List<Page> pages = pageSet.stream().filter(p -> {
             boolean isContains = true;
             for(Lemma l:lemmas) {
-                if (l.getIndexesList().stream().noneMatch(i -> i.getPage().getPath().equals(p.getPath())))
+                if(l.getLemma().equals(lemma.get().getLemma())) continue;
+                if(indexesRepository.findOutNumberOfIndexesWithSpecifiedPageIdAndLemmaId(p.getId(), l.getId()) == 0)
                     isContains = false;
+                break;
             }
             return isContains;
         }).toList();
@@ -177,22 +187,23 @@ public class SearchServiceImpl implements SearchService {
             return new ResponseClass(new SearchResponse(true, 0, null), true);
         pageSet.clear();
         Map<Page, Float> relativeRelevance =
-                        Relevance.getRelativeRelevance(pages, pageRepository, siteId, limit);
+                        Relevance.getRelativeRelevance(pages, pageRepository, siteId, limit, indexesRepository);
         if(!relativeRelevance.isEmpty())
             return new ResponseClass(setResponse(relativeRelevance
-                    , lemmasFromQuerySet), true);
+                    , lemmasFromQuery, siteId, lemmas), true);
         else return new ResponseClass(new FailResponse(false,
-            "Найдено слишком много страниц. " +
-            "Уточните запрос или укажите значение limit (не более 50)"), false);
+            "There are too much pages. " +
+            "Specify the limit value (no more than 50)"), false);
     }
 
     private SearchResponse setResponse(Map<Page, Float> relativeRelevance
-                                        , Set<String> queryWords) {
-        Set<Data> dataSet = new TreeSet<>();
+                                        , Set<String> queryWords, int siteId, Set<Lemma> lemmas) {
+        Set<SearchData> dataSet = new TreeSet<>();
         relativeRelevance.keySet().forEach(p -> {
             Document document = Jsoup.parse(p.getContent());
             Elements elements = document.body().getAllElements();
             TreeSet<Snippet> snippets = new TreeSet<>();
+            int numberOfPages = pageRepository.findCountPagesBySiteId(siteId);
                     elements.forEach(e -> {
                 if(e.hasText()) {
                     String [] words= e.text().split("[\\s+]");
@@ -212,9 +223,7 @@ public class SearchServiceImpl implements SearchService {
                             wordsOfElement.put(k, "");
                             return;
                         }
-                        if(lemmaCollector.anyWordBaseBelongToParticle(wordsOfElement.get(k))
-                        || Optional.ofNullable(LemmaCollector.RUSSIAN_MORPHOLOGY.
-                            getNormalForms(wordsOfElement.get(k))).isEmpty()) {
+                        if(lemmaCollector.anyWordBaseBelongToParticle(wordsOfElement.get(k))) {
                             wordsOfElement.put(k, "");
                         }
                     });
@@ -222,13 +231,21 @@ public class SearchServiceImpl implements SearchService {
                     Map<Integer, String> wordsOfElementContainedInQuery = new HashMap<>();
                     for(String s : queryWords) {
                         wordsOfElement.keySet().forEach(k ->  {
-                            if(LemmaCollector.RUSSIAN_MORPHOLOGY.
-                                getNormalForms(wordsOfElement.get(k)).get(0).equals(s)) {
-                                wordsOfElementContainedInQuery.put(k, wordsOfElement.get(k));
+                            try {
+                                if (LemmaCollector.RUSSIAN_MORPHOLOGY.
+                                        getNormalForms(wordsOfElement.get(k)).get(0).equals(s)) {
+                                    wordsOfElementContainedInQuery.put(k, wordsOfElement.get(k));
+                                } else if (wordsOfElement.get(k).matches("^\\p{sc=Latin}{2,}$")
+                                        && LemmaCollector.ENGLISH_MORPHOLOGY.
+                                        getNormalForms(wordsOfElement.get(k)).get(0).equals(s)) {
+                                    wordsOfElementContainedInQuery.put(k, wordsOfElement.get(k));
+                                }
+                            } catch (WrongCharaterException ex) {
+                                log.info("{}\n{}", ex.getMessage(), ex.getStackTrace());
                             }
                         });
                     }
-                    snippets.addAll(getSnippets(words, wordsOfElementContainedInQuery, e));
+                    snippets.addAll(getSnippets(words, wordsOfElementContainedInQuery, e, siteId, lemmas, numberOfPages));
                 }
             });
             dataSet.add(getSearchResultData(snippets
@@ -238,11 +255,11 @@ public class SearchServiceImpl implements SearchService {
                 relativeRelevance.size(), dataSet);
     }
 
-    private Data getSearchResultData(TreeSet<Snippet> snippets
+    private SearchData getSearchResultData(TreeSet<Snippet> snippets
             , Map<Page, Float> relativeRelevance, Page p, Document document
             , Set<String> queryWords) {
         List<Snippet> snippetList = new ArrayList<>(snippets);
-        Data data = new Data();
+        SearchData data = new SearchData();
         data.setRelevance(relativeRelevance.get(p));
         data.setSite(p.getSite().getUrl());
         data.setSiteName(p.getSite().getName());
@@ -266,9 +283,9 @@ public class SearchServiceImpl implements SearchService {
         return snippetStrings;
     }
 
-    private Set<Data> getPartOfData(Set<Data> data,
-                                    int offset, int limit) {
-        List<Data> subList = data.stream()
+    private Set<SearchData> getPartOfData(Set<SearchData> data,
+                                          int offset, int limit) {
+        List<SearchData> subList = data.stream()
                 .toList().subList(offset < data.size() ? offset : 0
                         , data.size());
         if (limit == 0) return new TreeSet<>(subList);
@@ -280,7 +297,7 @@ public class SearchServiceImpl implements SearchService {
 
     private TreeSet<Snippet> getSnippets(String [] words, Map<Integer,
             String> wordsOfElementContainedInQuery,
-                                         Element e) {
+                                         Element e, int siteId, Set<Lemma> lemmas, int numberOfPages) {
         wordsOfElementContainedInQuery.keySet().forEach(k -> words[k] = "<b>" + words[k] + "</b>");
         Set<Snippet> snippetSet = new TreeSet<>();
         List<Snippet> uniqueSnippetList = new ArrayList<>();
@@ -318,29 +335,6 @@ public class SearchServiceImpl implements SearchService {
                 .getSnippet(), "<b>", "</b>"))))
                 uniqueSnippetList.add(snippetList.get(i));
         }
-        return new TreeSet<>(getSnippetsWithoutTooCommonLemma(uniqueSnippetList));
-    }
-
-    private TreeSet<Snippet> getSnippetsWithoutTooCommonLemma(List<Snippet> snippets) {
-        TreeSet<Snippet> goodSnippets = new TreeSet<>();
-        snippets.forEach(s -> {
-            if(snippets.size() == 1) goodSnippets.add(s);
-            if(s.getNumberOfMatchingWords() > 1) goodSnippets.add(s);
-            else {
-                String makeLemmaFromSnippetWord = new LemmaCollector().collectLemmas(
-                    StringUtils.substringBetween(s.getSnippet(), "<b>", "</b>")
-                    .replaceAll("\\p{P}", "")
-                    .trim()).keySet().stream().findFirst().get();
-                try {
-                    float commonPercent = (float) lemmaRepository.findLemmaBySiteIdAndLemma(siteId,
-                        makeLemmaFromSnippetWord).getFrequency() /
-                        pageRepository.findCountPagesBySiteId(siteId) * 100;
-                    if(commonPercent < 30) goodSnippets.add(s);
-                } catch (NullPointerException ex) {
-                    log.info("site id - {}, lemma - {} ", siteId, makeLemmaFromSnippetWord);
-                }
-            }
-        });
-     return goodSnippets;
+        return new TreeSet<>(Snippet.getSnippetsWithInfrequentlyRepeatedWords(uniqueSnippetList, siteId, lemmas, numberOfPages));
     }
 }
