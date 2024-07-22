@@ -206,46 +206,7 @@ public class SearchServiceImpl implements SearchService {
             int numberOfPages = pageRepository.findCountPagesBySiteId(siteId);
                     elements.forEach(e -> {
                 if(e.hasText()) {
-                    String [] words= e.text().split("[\\s+]");
-                    Map<Integer, String> wordsOfElement = new HashMap<>();
-                    int uniqueKey = 0;
-                    for(String s : words) {
-                        wordsOfElement.put(uniqueKey, s.replaceAll("\\p{P}", "")
-                                .trim().toLowerCase(Locale.ROOT));
-                        uniqueKey++;
-                    }
-                    wordsOfElement.keySet().forEach(k -> {
-                        if(!wordsOfElement.get(k).matches("[а-яё]+")
-                                || wordsOfElement.get(k).length() < 2
-                                || (wordsOfElement.get(k).length() == 2
-                                && (wordsOfElement.get(k).contains("ь")
-                                || wordsOfElement.get(k).contains("ъ")))) {
-                            wordsOfElement.put(k, "");
-                            return;
-                        }
-                        if(lemmaCollector.anyWordBaseBelongToParticle(wordsOfElement.get(k))) {
-                            wordsOfElement.put(k, "");
-                        }
-                    });
-                    wordsOfElement.keySet().removeIf(elem-> wordsOfElement.get(elem).isEmpty());
-                    Map<Integer, String> wordsOfElementContainedInQuery = new HashMap<>();
-                    for(String s : queryWords) {
-                        wordsOfElement.keySet().forEach(k ->  {
-                            try {
-                                if (LemmaCollector.RUSSIAN_MORPHOLOGY.
-                                        getNormalForms(wordsOfElement.get(k)).get(0).equals(s)) {
-                                    wordsOfElementContainedInQuery.put(k, wordsOfElement.get(k));
-                                } else if (wordsOfElement.get(k).matches("^\\p{sc=Latin}{2,}$")
-                                        && LemmaCollector.ENGLISH_MORPHOLOGY.
-                                        getNormalForms(wordsOfElement.get(k)).get(0).equals(s)) {
-                                    wordsOfElementContainedInQuery.put(k, wordsOfElement.get(k));
-                                }
-                            } catch (WrongCharaterException ex) {
-                                log.info("{}\n{}", ex.getMessage(), ex.getStackTrace());
-                            }
-                        });
-                    }
-                    snippets.addAll(getSnippets(words, wordsOfElementContainedInQuery, e, siteId, lemmas, numberOfPages));
+                    handleElement(e, queryWords, snippets, siteId, lemmas, numberOfPages);
                 }
             });
             dataSet.add(getSearchResultData(snippets
@@ -253,6 +214,50 @@ public class SearchServiceImpl implements SearchService {
         });
         return new SearchResponse(true,
                 relativeRelevance.size(), dataSet);
+    }
+
+    private void handleElement(Element e, Set<String> queryWords
+            , TreeSet<Snippet> snippets, int siteId, Set<Lemma> lemmas, int numberOfPages) {
+        String [] words= e.text().split("[\\s+]");
+        Map<Integer, String> wordsOfElement = new HashMap<>();
+        int uniqueKey = 0;
+        for(String s : words) {
+            wordsOfElement.put(uniqueKey, s.replaceAll("\\p{P}", "")
+                    .trim().toLowerCase(Locale.ROOT));
+            uniqueKey++;
+        }
+        wordsOfElement.keySet().forEach(k -> {
+            if(!wordsOfElement.get(k).matches("[а-яё]+")
+                    || wordsOfElement.get(k).length() < 2
+                    || (wordsOfElement.get(k).length() == 2
+                    && (wordsOfElement.get(k).contains("ь")
+                    || wordsOfElement.get(k).contains("ъ")))) {
+                wordsOfElement.put(k, "");
+                return;
+            }
+            if(lemmaCollector.anyWordBaseBelongToParticle(wordsOfElement.get(k))) {
+                wordsOfElement.put(k, "");
+            }
+        });
+        wordsOfElement.keySet().removeIf(elem-> wordsOfElement.get(elem).isEmpty());
+        Map<Integer, String> wordsOfElementContainedInQuery = new HashMap<>();
+        for(String s : queryWords) {
+            wordsOfElement.keySet().forEach(k ->  {
+                try {
+                    if (LemmaCollector.RUSSIAN_MORPHOLOGY.
+                            getNormalForms(wordsOfElement.get(k)).get(0).equals(s)) {
+                        wordsOfElementContainedInQuery.put(k, wordsOfElement.get(k));
+                    } else if (wordsOfElement.get(k).matches("^\\p{sc=Latin}{2,}$")
+                            && LemmaCollector.ENGLISH_MORPHOLOGY.
+                            getNormalForms(wordsOfElement.get(k)).get(0).equals(s)) {
+                        wordsOfElementContainedInQuery.put(k, wordsOfElement.get(k));
+                    }
+                } catch (WrongCharaterException ex) {
+                    log.info("{}\n{}", ex.getMessage(), ex.getStackTrace());
+                }
+            });
+        }
+        snippets.addAll(getSnippets(words, wordsOfElementContainedInQuery, e, siteId, lemmas, numberOfPages));
     }
 
     private SearchData getSearchResultData(TreeSet<Snippet> snippets
@@ -302,27 +307,7 @@ public class SearchServiceImpl implements SearchService {
         Set<Snippet> snippetSet = new TreeSet<>();
         List<Snippet> uniqueSnippetList = new ArrayList<>();
         wordsOfElementContainedInQuery.keySet().forEach(k -> {
-            String snippet = "";
-            if(words.length < 5) {
-                for(int i = 0; i < words.length; i++) {
-                    if(i < e.text().split("[\\s+]").length - 1) {
-                        snippet += words[i] + " ";
-                    } else snippet += words[i].trim().replaceAll("[.,!?;:]", "");
-                }
-            } else {
-                if (k <= 2) snippet = String.format("%s %s %s %s %s%s",
-                    words[0], words[1], words[2], words[3], words[4].trim()
-                        .replaceAll("[.,!?;:]", ""), "...");
-                else if (words.length - k <= 3)  snippet = String.format("%s%s %s %s %s %s",
-                    "...", words[words.length - 5].trim(), words[words.length - 4],
-                    words[words.length - 3], words[words.length - 2],
-                    words[words.length - 1].replaceAll("[.,!?;:]", ""));
-                else  snippet = String.format("%s%s %s %s %s %s%s",
-                    "...", words[k - 2].trim(), words[k - 1],
-                    words[k], words[k + 1], words[k + 2]
-                        .trim().replaceAll("[.,!?;:]", ""), "...");
-            }
-            snippetSet.add(new Snippet(snippet, StringUtils.countMatches(snippet, "<b>")));
+            addSnippet(words, k, e, snippetSet);
         });
         List<Snippet> snippetList = new ArrayList<>(snippetSet);
         for(int i = 0; i < (snippetList.size() < 2 ? snippetSet.size() : snippetList.size() - 1); i++) {
@@ -337,4 +322,29 @@ public class SearchServiceImpl implements SearchService {
         }
         return new TreeSet<>(Snippet.getSnippetsWithInfrequentlyRepeatedWords(uniqueSnippetList, siteId, lemmas, numberOfPages));
     }
+
+    private void addSnippet(String [] words, Integer k, Element e, Set<Snippet> snippetSet) {
+        String snippet = "";
+        if(words.length < 5) {
+            for(int i = 0; i < words.length; i++) {
+                if(i < e.text().split("[\\s+]").length - 1) {
+                    snippet += words[i] + " ";
+                } else snippet += words[i].trim().replaceAll("[.,!?;:]", "");
+            }
+        } else {
+            if (k <= 2) snippet = String.format("%s %s %s %s %s%s",
+                    words[0], words[1], words[2], words[3], words[4].trim()
+                            .replaceAll("[.,!?;:]", ""), "...");
+            else if (words.length - k <= 3)  snippet = String.format("%s%s %s %s %s %s",
+                    "...", words[words.length - 5].trim(), words[words.length - 4],
+                    words[words.length - 3], words[words.length - 2],
+                    words[words.length - 1].replaceAll("[.,!?;:]", ""));
+            else  snippet = String.format("%s%s %s %s %s %s%s",
+                        "...", words[k - 2].trim(), words[k - 1],
+                        words[k], words[k + 1], words[k + 2]
+                                .trim().replaceAll("[.,!?;:]", ""), "...");
+        }
+        snippetSet.add(new Snippet(snippet, StringUtils.countMatches(snippet, "<b>")));
+    }
+
 }

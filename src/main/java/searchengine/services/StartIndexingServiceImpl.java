@@ -69,6 +69,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
         pagesIndexingThread.start();
         indexingThreadMap.put(pagesIndexingThread, site);
     }
+
     class Indexing extends Thread {
         @Override
         public void run() {
@@ -105,6 +106,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
             log.info("{} {}","Indexing is interrupted or stopped on purpose at ",
                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd.MM.yyyy")));
         }
+
         private void lemmatization() throws InterruptedException {
             List<searchengine.model.entities.Site> actualSitesList = siteRepository.findAll();
             double timeStamp = System.currentTimeMillis();
