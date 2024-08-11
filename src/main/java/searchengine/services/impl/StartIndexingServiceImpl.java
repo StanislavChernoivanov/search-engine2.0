@@ -83,7 +83,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
                     pageContainer);
             siteIndexer.start();
             indexingThreadMap.put(siteIndexer, site);
-        }catch (MalformedURLException | URISyntaxException e) {
+        } catch (MalformedURLException | URISyntaxException e) {
             log.error("Exception - {}\nException message - {}]\n{}",
                     e.getClass().getSimpleName(),
                     e.getMessage(),

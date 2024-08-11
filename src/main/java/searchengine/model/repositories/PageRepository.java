@@ -14,6 +14,7 @@ public interface PageRepository extends PagingAndSortingRepository<Page, Integer
 
     @Query("select p from Page p where p.path = :path")
     Page findPageByPath(@Param("path") String path);
+
     @Query(value = "SELECT count(*) FROM pages", nativeQuery = true)
     int getCountPages();
 

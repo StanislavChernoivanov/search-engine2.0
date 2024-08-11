@@ -227,7 +227,7 @@ public class SearchServiceImpl implements SearchService {
                 try {
                     if (wordsOfElement.get(k).matches(LemmaCollector.RUS_REGEX) &&
                             LemmaCollector.RUSSIAN_MORPHOLOGY.
-                            getNormalForms(wordsOfElement.get(k)).get(0).equals(s)) {
+                                    getNormalForms(wordsOfElement.get(k)).get(0).equals(s)) {
                         wordsOfElementContainedInQuery.put(k, wordsOfElement.get(k));
                     } else if (wordsOfElement.get(k).matches(LemmaCollector.ENG_REGEX)
                             && LemmaCollector.ENGLISH_MORPHOLOGY.
@@ -288,9 +288,8 @@ public class SearchServiceImpl implements SearchService {
         wordsOfElementContainedInQuery.keySet().forEach(k -> words[k] = "<b>" + words[k] + "</b>");
         Set<Snippet> snippetSet = new TreeSet<>();
         List<Snippet> uniqueSnippetList = new ArrayList<>();
-        wordsOfElementContainedInQuery.keySet().forEach(k -> {
-            addSnippet(words, k, e, snippetSet);
-        });
+        wordsOfElementContainedInQuery.keySet()
+                .forEach(k -> addSnippet(words, k, e, snippetSet));
         List<Snippet> snippetList = new ArrayList<>(snippetSet);
         for (int i = 0; i < (snippetList.size() < 2 ? snippetSet.size() : snippetList.size() - 1); i++) {
             if (i == 0) uniqueSnippetList.add(snippetList.get(i));
@@ -328,8 +327,6 @@ public class SearchServiceImpl implements SearchService {
         }
         snippetSet.add(new Snippet(snippet, StringUtils.countMatches(snippet, "<b>")));
     }
-
-
 
 
     @RequiredArgsConstructor

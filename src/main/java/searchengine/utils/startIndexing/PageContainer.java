@@ -1,7 +1,6 @@
 package searchengine.utils.startIndexing;
 
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.nodes.Document;
@@ -22,7 +21,7 @@ import java.util.stream.Collectors;
 @Scope("prototype")
 @NoArgsConstructor
 public class PageContainer {
-    private Map<String, Page> PAGE_CONTAINER = new HashMap<>();
+    private final Map<String, Page> PAGE_CONTAINER = new HashMap<>();
     @Setter
     @Autowired
     private PageRepository pageRepository;

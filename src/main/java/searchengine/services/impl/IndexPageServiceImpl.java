@@ -45,7 +45,6 @@ public class IndexPageServiceImpl implements IndexPageService {
     private final SaverOrRefresher saverOrRefresher;
 
 
-
     @Override
     public Response indexPage(String pageUrl) throws InterruptedException {
         URL url;

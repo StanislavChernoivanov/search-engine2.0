@@ -2,13 +2,11 @@ package searchengine.utils.startIndexing;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.annotation.Scope;
 import org.springframework.stereotype.Component;
-import searchengine.model.entities.Site;
 
 import java.util.concurrent.ForkJoinPool;
 
@@ -39,6 +37,7 @@ public class SiteIndexer extends Thread {
         }
 
     }
+
     @Autowired
     public void setFields(SiteParser siteParser, PageContainer pageContainer) {
         this.siteParser = siteParser;

@@ -46,6 +46,7 @@ public class SiteParser extends RecursiveAction {
     private String referrer;
     @Autowired
     private ObjectFactoryHolder objectFactoryHolder;
+
     public void setFields(URL url,
                           Site site,
                           PageRepository pageRepository,
