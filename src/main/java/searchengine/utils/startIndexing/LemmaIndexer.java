@@ -1,5 +1,7 @@
 package searchengine.utils.startIndexing;
-import lombok.*;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -8,23 +10,21 @@ import searchengine.model.entities.Indexes;
 import searchengine.model.entities.Lemma;
 import searchengine.model.entities.Page;
 import searchengine.model.entities.Site;
-import searchengine.model.repositories.PageRepository;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 
 @Log4j2
+@RequiredArgsConstructor
 public class LemmaIndexer implements Runnable {
 
     @Getter
     private final Site site;
     private final SaverOrRefresher saverOrRefresher;
     private final List<Page> pageList;
-    public LemmaIndexer(Site site, SaverOrRefresher saverOrRefresher, List<Page> pageList) {
-        this.site = site;
-        this.saverOrRefresher = saverOrRefresher;
-        this.pageList = pageList;
-    }
+
 
     public void run() {
         pageList.forEach(p -> {

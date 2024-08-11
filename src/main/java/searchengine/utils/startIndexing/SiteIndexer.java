@@ -1,52 +1,36 @@
 package searchengine.utils.startIndexing;
-import lombok.Getter;
-import lombok.extern.log4j.Log4j2;
-import searchengine.model.entities.Site;
-import searchengine.model.repositories.PageRepository;
-import searchengine.model.repositories.SiteRepository;
 
-import java.net.URI;
-import java.net.URL;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
+import searchengine.model.entities.Site;
+
 import java.util.concurrent.ForkJoinPool;
 
 
 @Log4j2
+@NoArgsConstructor
+@Component
+@Lazy
+@Scope("prototype")
 public class SiteIndexer extends Thread {
     @Getter
-    private final Site site;
-    private final PageRepository pageRepository;
-    private final SiteRepository siteRepository;
-    @Getter
     private ForkJoinPool pool;
+    private PageContainer pageContainer;
 
-    private final String userAgent;
-    private final String referrer;
+    private SiteParser siteParser;
 
-    private final PageContainer pageContainer;
-
-    public SiteIndexer(Site site
-            , PageRepository pageRepository
-            , SiteRepository siteRepository
-            , String userAgent
-            , String referrer) {
-        this.site = site;
-        this.pageRepository = pageRepository;
-        this.siteRepository = siteRepository;
-        this.userAgent = userAgent;
-        this.referrer = referrer;
-        pageContainer = new PageContainer(pageRepository);
-    }
 
     @Override
     public void run() {
-        SiteParser parser;
         pool = new ForkJoinPool();
-        URL url;
         try {
-            url = new URI(site.getUrl()).toURL();
-            parser = new SiteParser(pageContainer, url,
-                    site, pageRepository, siteRepository, userAgent, referrer);
-            pool.invoke(parser);
+            pool.invoke(siteParser);
         } catch (Exception e) {
             log.error("{}\n{}\n{}", e.getClass().getSimpleName(), e.getMessage(), e.getStackTrace());
         } finally {
@@ -54,6 +38,11 @@ public class SiteIndexer extends Thread {
             pageContainer.clear();
         }
 
+    }
+    @Autowired
+    public void setFields(SiteParser siteParser, PageContainer pageContainer) {
+        this.siteParser = siteParser;
+        this.pageContainer = pageContainer;
     }
 
 

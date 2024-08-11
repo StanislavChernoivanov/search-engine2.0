@@ -1,5 +1,7 @@
 package searchengine.utils.startIndexing;
+
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
@@ -7,45 +9,71 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
 import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
 
 import java.net.*;
-import java.util.*;
-import java.util.concurrent.*;
-@Slf4j
-public class SiteParser extends RecursiveAction {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ForkJoinTask;
+import java.util.concurrent.RecursiveAction;
 
-    private final PageContainer pageContainer;
+@Slf4j
+@Component
+@Scope("prototype")
+@NoArgsConstructor
+@Lazy
+public class SiteParser extends RecursiveAction {
+    @Autowired
+    private PageContainer pageContainer;
 
     @Getter
-    private final URL url;
-    private final Site site;
-
-    private final PageRepository pageRepository;
-    private final SiteRepository siteRepository;
-    private final String userAgent;
-    private final String referrer;
-
-
-    public SiteParser(PageContainer pageContainer, URL url, Site site, PageRepository pageRepository
-            , SiteRepository siteRepository, String userAgent, String referrer) {
-        this.pageContainer = pageContainer;
+    private URL url;
+    private Site site;
+    @Autowired
+    private PageRepository pageRepository;
+    @Autowired
+    private SiteRepository siteRepository;
+    private String userAgent;
+    private String referrer;
+    @Autowired
+    private ObjectFactoryHolder objectFactoryHolder;
+    public void setFields(URL url,
+                          Site site,
+                          PageRepository pageRepository,
+                          SiteRepository siteRepository,
+                          String userAgent,
+                          String referrer,
+                          PageContainer pageContainer,
+                          ObjectFactoryHolder objectFactoryHolder) {
+        this.url = url;
         this.site = site;
         this.pageRepository = pageRepository;
-        this.url = url;
         this.siteRepository = siteRepository;
         this.userAgent = userAgent;
         this.referrer = referrer;
+        this.pageContainer = pageContainer;
+        this.objectFactoryHolder = objectFactoryHolder;
     }
 
     private Set<String> getChildes(URL parent) {
         Set<String> childes = new TreeSet<>();
         try {
             if (pageContainer.isContainsPage(parent.getPath().trim())) return childes;
-            Connection connection = Jsoup.connect(parent.toString())
-                    .maxBodySize(0).timeout(0).ignoreContentType(true);
+            Connection connection = Jsoup.connect(parent.toString()).
+                    referrer(referrer).
+                    userAgent(userAgent).
+                    maxBodySize(0).
+                    timeout(0).
+                    ignoreContentType(true);
             Document doc;
             Thread.sleep((long) (Math.random() * 50 + 100));
             try {
@@ -77,7 +105,7 @@ public class SiteParser extends RecursiveAction {
                 } catch (MalformedURLException | URISyntaxException ignored) {
                 }
             }
-        }catch (InterruptedException e) {
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.debug("thread - {} was interrupted", Thread.currentThread().getName());
         } catch (Exception e) {
@@ -93,8 +121,15 @@ public class SiteParser extends RecursiveAction {
             try {
                 List<SiteParser> taskList = new ArrayList<>();
                 for (String child : childes) {
-                    SiteParser task = new SiteParser(pageContainer, new URI(child).toURL(),
-                            site, pageRepository, siteRepository, userAgent, referrer);
+                    SiteParser task = objectFactoryHolder.getSiteParser(
+                            new URI(child).toURL(),
+                            site,
+                            pageRepository,
+                            siteRepository,
+                            userAgent,
+                            referrer,
+                            pageContainer,
+                            objectFactoryHolder);
                     task.fork();
                     taskList.add(task);
                 }

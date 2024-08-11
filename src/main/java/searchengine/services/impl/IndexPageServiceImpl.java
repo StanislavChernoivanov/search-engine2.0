@@ -1,18 +1,24 @@
-package searchengine.services;
-import lombok.extern.log4j.Log4j2;
+package searchengine.services.impl;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Connection;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.stereotype.Service;
 import searchengine.config.SitesList;
-import searchengine.dto.Response;
-import searchengine.utils.startIndexing.LemmaIndexer;
 import searchengine.dto.FailResponse;
-import searchengine.model.entities.*;
+import searchengine.dto.Response;
+import searchengine.model.entities.Indexes;
+import searchengine.model.entities.Lemma;
+import searchengine.model.entities.Page;
+import searchengine.model.entities.Site;
 import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.LemmaRepository;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
+import searchengine.services.IndexPageService;
+import searchengine.utils.startIndexing.LemmaIndexer;
 import searchengine.utils.startIndexing.SaverOrRefresher;
 
 import java.io.IOException;
@@ -20,34 +26,23 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 @Service
-@Log4j2
-public class IndexPageServiceImpl  implements IndexPageService{
+@Slf4j
+@RequiredArgsConstructor
+public class IndexPageServiceImpl implements IndexPageService {
 
-        private final LemmaRepository lemmaRepository;
-        private final IndexesRepository indexesRepository;
-        private final PageRepository pageRepository;
-        private final SiteRepository siteRepository;
-        private Document doc;
-        private Connection connection;
-        private final SitesList sites;
-        private final SaverOrRefresher saverOrRefresher;
-
-    public IndexPageServiceImpl(LemmaRepository lemmaRepository,
-                                IndexesRepository indexesRepository,
-                                PageRepository pageRepository,
-                                SiteRepository siteRepository,
-                                SitesList sites) {
-        this.lemmaRepository = lemmaRepository;
-        this.indexesRepository = indexesRepository;
-        this.pageRepository = pageRepository;
-        this.siteRepository = siteRepository;
-        this.sites = sites;
-        saverOrRefresher = SaverOrRefresher.getInstance(lemmaRepository, indexesRepository);
-    }
-
+    private final LemmaRepository lemmaRepository;
+    private final IndexesRepository indexesRepository;
+    private final PageRepository pageRepository;
+    private final SiteRepository siteRepository;
+    private Document doc;
+    private Connection connection;
+    private final SitesList sites;
+    private final SaverOrRefresher saverOrRefresher;
 
 
 
@@ -59,6 +54,8 @@ public class IndexPageServiceImpl  implements IndexPageService{
         } catch (MalformedURLException | URISyntaxException e) {
             return new FailResponse(false, "Данная страница находится за пределами сайтов, " +
                     "указанных в конфигурационном файле");
+        } catch (IllegalArgumentException ex) {
+            return new FailResponse(false, "Введите абсолютный URI");
         }
         Response response = new Response(true);
         Optional<Page> optionalPage = Optional.ofNullable(pageRepository.findPageByPath(url.getPath()));
@@ -88,7 +85,8 @@ public class IndexPageServiceImpl  implements IndexPageService{
             } else siteModel = optionalSite.get();
             if (indexPage(url, siteModel)) {
                 return new FailResponse(false, "Отсутствует соединение с данной страницей");
-            } return response;
+            }
+            return response;
         }
     }
 
@@ -103,7 +101,7 @@ public class IndexPageServiceImpl  implements IndexPageService{
         optLemmaList.clear();
         pageRepository.delete(outdatedPage);
         indexList.clear();
-        if(indexPage(url, site))
+        if (indexPage(url, site))
             return new FailResponse(false, "Отсутствует соединение с данной страницей");
         return response;
     }

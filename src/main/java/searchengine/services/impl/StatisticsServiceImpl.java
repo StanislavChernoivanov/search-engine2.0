@@ -1,15 +1,17 @@
-package searchengine.services;
+package searchengine.services.impl;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import searchengine.dto.FailResponse;
+import searchengine.dto.Response;
 import searchengine.dto.statistics.DetailedStatisticsItem;
 import searchengine.dto.statistics.StatisticsData;
 import searchengine.dto.statistics.StatisticsResponse;
 import searchengine.dto.statistics.TotalStatistics;
-import searchengine.dto.FailResponse;
 import searchengine.model.repositories.LemmaRepository;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
-import searchengine.dto.Response;
+import searchengine.services.StatisticsService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +32,7 @@ public class StatisticsServiceImpl implements StatisticsService {
         total.setIndexing(true);
         List<DetailedStatisticsItem> detailed = new ArrayList<>();
         List<searchengine.model.entities.Site> sites = siteRepository.findAll();
-        if(sites.isEmpty())
+        if (sites.isEmpty())
             return new FailResponse(false, "Сайты не доступны. Убедитесь, что индексация проведена");
         sites.forEach(s -> {
             DetailedStatisticsItem item = new DetailedStatisticsItem();

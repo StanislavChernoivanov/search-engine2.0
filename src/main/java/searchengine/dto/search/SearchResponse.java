@@ -1,5 +1,8 @@
 package searchengine.dto.search;
-import lombok.*;
+
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 import searchengine.dto.Response;
 
 import java.util.Set;

@@ -1,4 +1,5 @@
 package searchengine.dto.search;
+
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,12 +9,15 @@ import searchengine.utils.startIndexing.LemmaCollector;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+
 @RequiredArgsConstructor
 @Getter
 @Slf4j
 public class Snippet implements Comparable<Snippet> {
     private final String snippet;
     private final int numberOfMatchingWords;
+
+
     @Override
     public int compareTo(Snippet o) {
         int lengthThis = this.snippet.replaceAll("[^а-яёА-ЯЁ]", "").length();
@@ -31,11 +35,11 @@ public class Snippet implements Comparable<Snippet> {
         Arrays.stream(wordsArrayOfFirstSnippet).toList().forEach(s -> {
             for (String snip : wordsArrayOfSecondSnippet) {
                 if (s.replaceAll("[.,!?;:]", "")
-                    .equals(snip.replaceAll("[.,!?;:]", "")))
+                        .equals(snip.replaceAll("[.,!?;:]", "")))
                     counter.getAndIncrement();
             }
         });
-        if(countOfLemmaInQuery < 5) return countOfLemmaInQuery - counter.get() <= 1;
+        if (countOfLemmaInQuery < 5) return countOfLemmaInQuery - counter.get() <= 1;
         else return countOfLemmaInQuery - counter.get() <= 2;
     }
 
@@ -45,9 +49,9 @@ public class Snippet implements Comparable<Snippet> {
             , Set<Lemma> lemmas
             , int numberOfPages) {
         TreeSet<Snippet> goodSnippets = new TreeSet<>();
-                snippets.forEach(s -> {
-            if(snippets.size() == 1) goodSnippets.add(s);
-            else if(s.getNumberOfMatchingWords() > 1) goodSnippets.add(s);
+        snippets.forEach(s -> {
+            if (snippets.size() == 1) goodSnippets.add(s);
+            else if (s.getNumberOfMatchingWords() > 1) goodSnippets.add(s);
             else {
                 String makeLemmaFromSnippetWord = new LemmaCollector().collectLemmas(
                         StringUtils.substringBetween(s.getSnippet(), "<b>", "</b>")
@@ -66,7 +70,7 @@ public class Snippet implements Comparable<Snippet> {
                         log.info("word from snippet - {}, lemmas: - {}", makeLemmaFromSnippetWord
                                 , Arrays.toString(lemmas.stream().map(Lemma::getLemma).distinct().toArray()));
                     }
-                    if(commonPercent < 30) goodSnippets.add(s);
+                    if (commonPercent < 30) goodSnippets.add(s);
                 } catch (NullPointerException ex) {
                     log.warn("site id - {}, lemma - {} ", siteId, makeLemmaFromSnippetWord);
                 }

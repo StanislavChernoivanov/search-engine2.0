@@ -1,4 +1,5 @@
 package searchengine.services;
+
 import searchengine.dto.Response;
 
 public interface SearchService {

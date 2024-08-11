@@ -1,8 +1,8 @@
 package searchengine.model.entities;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.ToString;
 
 import javax.persistence.*;
 import java.io.Serializable;
@@ -34,9 +34,5 @@ public class Page implements Serializable {
     @OneToMany(mappedBy = "page", cascade = CascadeType.REMOVE)
     private List<Indexes> indexList = new ArrayList<>();
 
-
-    public double getMemorySize() {
-        return (path.length() * 2D + content.length() * 2D) / 1048576;
-    }
 
 }

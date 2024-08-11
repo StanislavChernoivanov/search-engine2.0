@@ -1,4 +1,5 @@
 package searchengine.dto.statistics;
+
 import lombok.Getter;
 import lombok.Setter;
 import searchengine.dto.Response;

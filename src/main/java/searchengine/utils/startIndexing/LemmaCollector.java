@@ -6,21 +6,26 @@ import org.apache.lucene.morphology.LuceneMorphology;
 import org.apache.lucene.morphology.WrongCharaterException;
 import org.apache.lucene.morphology.english.EnglishLuceneMorphology;
 import org.apache.lucene.morphology.russian.RussianLuceneMorphology;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
 @Slf4j
 @RequiredArgsConstructor
 public class LemmaCollector {
     private static final String[] commonParticlesNames
-            = new String[]{"МЕЖД", "ПРЕДЛ", "СОЮЗ", "PREP", "PN_ADJ", "PN pers", "CONJ, VBE"};
+            = new String[]{"МЕЖД", "ПРЕДЛ", "СОЮЗ", "PREP",
+            "PN_ADJ", "PN pers", "CONJ, VBE"};
 
-    private static final String RUS_REGEX;
-    private static final String ENG_REGEX;
+    public static final String RUS_REGEX;
+    public static final String ENG_REGEX;
     public static final LuceneMorphology RUSSIAN_MORPHOLOGY;
 
     public static final LuceneMorphology ENGLISH_MORPHOLOGY;
-
 
 
     private final Map<String, Integer> lemmas = new HashMap<>();
@@ -41,14 +46,14 @@ public class LemmaCollector {
         clear();
         String[] words = arrayContainsWords(text);
         for (String word : words) {
-            if(word.matches(RUS_REGEX)) russianWordProcessing(word);
-            else if(word.matches(ENG_REGEX)) englishWordProcessing(word);
+            if (word.matches(RUS_REGEX)) russianWordProcessing(word);
+            else if (word.matches(ENG_REGEX)) englishWordProcessing(word);
         }
         return lemmas;
     }
 
-    private void russianWordProcessing(String word){
-        if(word.length() == 2
+    private void russianWordProcessing(String word) {
+        if (word.length() == 2
                 && (word.contains("ь") || word.contains("ъ"))) return;
         if (word.isBlank() || !word.matches("[а-яёА-ЯЁ]+")) return;
         List<String> wordBaseForms = RUSSIAN_MORPHOLOGY.getMorphInfo(word);
@@ -63,7 +68,7 @@ public class LemmaCollector {
         }
     }
 
-    private void englishWordProcessing(String word){
+    private void englishWordProcessing(String word) {
         try {
             List<String> wordBaseForms = ENGLISH_MORPHOLOGY.getMorphInfo(word);
             if (anyWordBaseBelongToParticle(wordBaseForms)) return;
@@ -80,7 +85,9 @@ public class LemmaCollector {
         }
     }
 
-    public void clear() {lemmas.clear();}
+    public void clear() {
+        lemmas.clear();
+    }
 
     private boolean anyWordBaseBelongToParticle(List<String> wordBaseForms) {
         return wordBaseForms.stream().anyMatch(this::hasParticleProperty);

@@ -1,4 +1,5 @@
 package searchengine.model.entities;
+
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
@@ -10,14 +11,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "lemmas",uniqueConstraints =
+@Table(name = "lemmas", uniqueConstraints =
 @UniqueConstraint(name = "l_index", columnNames = {"lemma", "site_id"}),
         indexes = @javax.persistence.Index(name = "lemma_index", columnList = "lemma"))
 @Getter
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 @ToString
-public class Lemma  implements Comparable<Lemma>, Serializable {
+public class Lemma implements Comparable<Lemma>, Serializable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
@@ -35,7 +36,7 @@ public class Lemma  implements Comparable<Lemma>, Serializable {
 
     @Override
     public int compareTo(Lemma o) {
-        if(getFrequency() == o.getFrequency()) return Integer.compare(id, o.id);
+        if (getFrequency() == o.getFrequency()) return Integer.compare(id, o.id);
         return Integer.compare(this.frequency, o.frequency);
     }
 }

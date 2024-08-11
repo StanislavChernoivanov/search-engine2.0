@@ -1,13 +1,16 @@
 package searchengine.dto.search;
+
 import lombok.RequiredArgsConstructor;
+import lombok.experimental.UtilityClass;
 import lombok.extern.log4j.Log4j2;
 import searchengine.model.entities.Page;
 import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.PageRepository;
+
 import java.util.*;
 
-@RequiredArgsConstructor
 @Log4j2
+@UtilityClass
 public class Relevance {
 
     public static Map<Page, Float> getRelativeRelevance(List<Page> pages
@@ -20,7 +23,7 @@ public class Relevance {
             Map<Page, Float> relativeRelevanceMap =
                     new TreeMap<>(Comparator.comparing(absoluteRelevanceMap::get));
             absoluteRelevanceMap.keySet().forEach(f -> {
-                if((limit > 0 && limit <= 50)
+                if ((limit > 0 && limit <= 50)
                         || absoluteRelevanceMap.size() < 200)
                     relativeRelevanceMap.put(f, absoluteRelevanceMap.get(f) / max.get());
             });

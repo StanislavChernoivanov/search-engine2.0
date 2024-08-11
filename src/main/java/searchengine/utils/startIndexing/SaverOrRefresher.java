@@ -1,14 +1,19 @@
 package searchengine.utils.startIndexing;
+
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
-
+import org.springframework.stereotype.Component;
 import searchengine.model.entities.Indexes;
 import searchengine.model.entities.Lemma;
 import searchengine.model.repositories.IndexesRepository;
 import searchengine.model.repositories.LemmaRepository;
-import java.util.*;
+
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
 
 @Log4j2
+@Component
 public class SaverOrRefresher {
     private final Set<Lemma> lemmaBuffer;
     private final Set<Indexes> indexBuffer;
@@ -16,18 +21,8 @@ public class SaverOrRefresher {
     private final LemmaRepository lemmaRepository;
     @Getter
     private final IndexesRepository indexesRepository;
-    private static SaverOrRefresher saverOrRefresher;
 
-    public volatile boolean isInterrupted = false;
-
-
-    public static synchronized SaverOrRefresher getInstance
-            (LemmaRepository lemmaRepository, IndexesRepository indexesRepository) {
-        if(saverOrRefresher == null) {
-            saverOrRefresher = new SaverOrRefresher(lemmaRepository, indexesRepository);
-        }
-        return saverOrRefresher;
-    }
+    public boolean isInterrupted = false;
 
     private SaverOrRefresher(LemmaRepository lemmaRepository, IndexesRepository indexesRepository) {
         this.lemmaRepository = lemmaRepository;
@@ -36,7 +31,7 @@ public class SaverOrRefresher {
         indexBuffer = new HashSet<>();
     }
 
-    synchronized Optional<Lemma> getOptionalLemma(String key, int siteId)  {
+    synchronized Optional<Lemma> getOptionalLemma(String key, int siteId) {
         return Optional.ofNullable(lemmaRepository.findLemma(key, siteId));
     }
 
@@ -67,8 +62,8 @@ public class SaverOrRefresher {
     }
 
     public synchronized void saveRemainedLemmasInDB() {
-        if(!lemmaBuffer.isEmpty()) lemmaRepository.saveAllAndFlush(lemmaBuffer);
-        if(!indexBuffer.isEmpty()) indexesRepository.saveAllAndFlush(indexBuffer);
+        if (!lemmaBuffer.isEmpty()) lemmaRepository.saveAllAndFlush(lemmaBuffer);
+        if (!indexBuffer.isEmpty()) indexesRepository.saveAllAndFlush(indexBuffer);
         clearBuffers();
     }
 
