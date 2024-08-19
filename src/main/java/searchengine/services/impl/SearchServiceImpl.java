@@ -24,7 +24,7 @@ import searchengine.model.repositories.LemmaRepository;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
 import searchengine.services.SearchService;
-import searchengine.utils.startIndexing.LemmaCollector;
+import searchengine.utils.LemmaCollector;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -32,81 +32,30 @@ import java.util.stream.Collectors;
 
 @Service
 @Log4j2
+@RequiredArgsConstructor
 public class SearchServiceImpl implements SearchService {
     private final LemmaRepository lemmaRepository;
     private final SiteRepository siteRepository;
     private final PageRepository pageRepository;
     private final IndexesRepository indexesRepository;
     private final LemmaCollector lemmaCollector = new LemmaCollector();
-    private final Set<SearchResponse> containedMatchesResponses;
-    private final Set<FailResponse> doNotContainedMatchesResponse;
+    private final Set<SearchResponse> containedMatchesResponses = new HashSet<>();
+    private final Set<FailResponse> doNotContainedMatchesResponse = new HashSet<>();
 
-    public SearchServiceImpl(LemmaRepository lemmaRepository, SiteRepository siteRepository, PageRepository pageRepository, IndexesRepository indexesRepository) {
-        this.lemmaRepository = lemmaRepository;
-        this.siteRepository = siteRepository;
-        this.pageRepository = pageRepository;
-        this.indexesRepository = indexesRepository;
-        containedMatchesResponses = new HashSet<>();
-        doNotContainedMatchesResponse = new HashSet<>();
-    }
 
 
     @Override
     public Response search(String query, String site, Integer offset, Integer limit) {
         if (offset == null) offset = 0;
         if (limit == null) limit = 0;
-        if (query == null)
-            return new FailResponse(false, "Empty request specified");
+        if (query == null || query.isEmpty())
+            return new FailResponse(false, "Empty request param specified");
         lemmaCollector.clear();
         if (siteRepository.getCountSites() == 0)
             return new FailResponse(false, "No site indexing, need to index");
         Set<String> lemmasFromQuerySet = lemmaCollector.collectLemmas(query).keySet();
         if (site == null) {
-            List<Site> siteList = siteRepository.findAll();
-            Integer finalLimit = limit;
-            siteList.forEach(s -> {
-                ResponseClass responseClass = countRelevanceAndGetResponse
-                        (lemmasFromQuerySet, s.getUrl(), finalLimit);
-                if (responseClass.isContainsMatches())
-                    containedMatchesResponses.add((SearchResponse) responseClass.getResponse());
-                else doNotContainedMatchesResponse.add((FailResponse) responseClass.getResponse());
-            });
-            if (doNotContainedMatchesResponse.isEmpty()) {
-                int count = containedMatchesResponses.stream().map(SearchResponse::getCount)
-                        .reduce(Integer::sum).get();
-                Set<SearchData> commonData = new TreeSet<>();
-                containedMatchesResponses.stream().filter(r -> r.getData() != null)
-                        .forEach(r -> commonData.addAll(r.getData()));
-                SearchResponse searchResponse =
-                        new SearchResponse(true, count, commonData);
-                searchResponse.setData(getPartOfData
-                        (searchResponse.getData(), offset, limit));
-                clearMemory();
-                return limitTooManyPages(searchResponse, limit);
-
-            } else if (doNotContainedMatchesResponse.stream().
-                    anyMatch(response -> response.getError().matches("^[\\w\\s.]+\\([\\w\\s]+\\)$"))) {
-                Response response = doNotContainedMatchesResponse.stream().
-                        filter(failResponse -> failResponse.getError().
-                                matches("^[\\w\\s.]+\\([\\w\\s]+\\)$")).findFirst().get();
-                clearMemory();
-                return response;
-
-            } else if (!containedMatchesResponses.isEmpty()) {
-                int count = containedMatchesResponses.stream().map(SearchResponse::getCount).
-                        reduce(Integer::sum).get();
-                Set<SearchData> commonData = new TreeSet<>();
-                containedMatchesResponses.stream().filter(r -> r.getData() != null)
-                        .forEach(r -> commonData.addAll(r.getData()));
-                SearchResponse searchResponse =
-                        new SearchResponse(true, count, commonData);
-                searchResponse.setData(getPartOfData
-                        (searchResponse.getData(), offset, limit));
-                clearMemory();
-                return limitTooManyPages(searchResponse, limit);
-            } else {
-                return doNotContainedMatchesResponse.stream().findFirst().get();
-            }
+            return searchInSiteNotSpecifiedCase(lemmasFromQuerySet, offset, limit);
         } else {
             if (siteRepository.findSiteByUrl(site).isEmpty()) {
                 clearMemory();
@@ -125,6 +74,55 @@ public class SearchServiceImpl implements SearchService {
         }
     }
 
+    private Response searchInSiteNotSpecifiedCase(Set<String> lemmasFromQuerySet,
+                                                        Integer offset,
+                                                        Integer limit) {
+        List<Site> siteList = siteRepository.findAll();
+        siteList.forEach(s -> {
+            ResponseComparator comparator = countRelevanceAndGetResponse
+                    (lemmasFromQuerySet, s.getUrl(), limit);
+            if (comparator.isContainsMatches())
+                containedMatchesResponses.add((SearchResponse) comparator.getResponse());
+            else doNotContainedMatchesResponse.add((FailResponse) comparator.getResponse());
+        });
+        if (doNotContainedMatchesResponse.isEmpty()) {
+            int countResults = containedMatchesResponses.stream().map(SearchResponse::getCount)
+                    .reduce(Integer::sum).get();
+            Set<SearchData> commonData = new TreeSet<>();
+            containedMatchesResponses.stream().filter(r -> r.getData() != null)
+                    .forEach(r -> commonData.addAll(r.getData()));
+            SearchResponse searchResponse =
+                    new SearchResponse(true, countResults, commonData);
+            searchResponse.setData(getPartOfData(
+                    searchResponse.getData(), offset, limit));
+            clearMemory();
+            return limitTooManyPages(searchResponse, limit);
+
+        } else if (doNotContainedMatchesResponse.stream().
+                anyMatch(response -> response.getError().matches("^[\\w\\s.]+\\([\\w\\s]+\\)$"))) {
+            Response response = doNotContainedMatchesResponse.stream().
+                    filter(failResponse -> failResponse.getError().
+                            matches("^[\\w\\s.]+\\([\\w\\s]+\\)$")).findFirst().get();
+            clearMemory();
+            return response;
+
+        } else if (!containedMatchesResponses.isEmpty()) {
+            int countResults = containedMatchesResponses.stream().map(SearchResponse::getCount).
+                    reduce(Integer::sum).get();
+            Set<SearchData> commonData = new TreeSet<>();
+            containedMatchesResponses.stream().filter(r -> r.getData() != null)
+                    .forEach(r -> commonData.addAll(r.getData()));
+            SearchResponse searchResponse =
+                    new SearchResponse(true, countResults, commonData);
+            searchResponse.setData(getPartOfData(
+                    searchResponse.getData(), offset, limit));
+            clearMemory();
+            return limitTooManyPages(searchResponse, limit);
+        } else {
+            return doNotContainedMatchesResponse.stream().findFirst().get();
+        }
+    }
+
     private void clearMemory() {
         doNotContainedMatchesResponse.clear();
         containedMatchesResponses.clear();
@@ -139,18 +137,18 @@ public class SearchServiceImpl implements SearchService {
         } else return searchResponse;
     }
 
-    private ResponseClass countRelevanceAndGetResponse
+    private ResponseComparator countRelevanceAndGetResponse
             (Set<String> lemmasFromQuery,
              String siteUrl, int limit) {
         Optional<Site> siteEntity = siteRepository.findSiteByUrl(siteUrl);
         if (siteEntity.isEmpty())
-            return new ResponseClass(new FailResponse(false
+            return new ResponseComparator(new FailResponse(false
                     , "Specified site is not found"), false);
         int siteId = siteEntity.get().getId();
         Set<Lemma> lemmas = new TreeSet<>(
                 lemmaRepository.findMatchingLemma(lemmasFromQuery.stream().toList(), siteId));
-        if (lemmas.size() != lemmasFromQuery.size())
-            return new ResponseClass(new SearchResponse(true,
+        if (lemmas.size() != lemmasFromQuery.size() || lemmas.isEmpty())
+            return new ResponseComparator(new SearchResponse(true,
                     0, null), true);
         Optional<Lemma> lemma = lemmas.stream().findFirst();
         List<Page> pageSet = pageRepository.findPagesByLemma(lemma.get().getId());
@@ -165,14 +163,14 @@ public class SearchServiceImpl implements SearchService {
             return isContains;
         }).toList();
         if (pages.isEmpty())
-            return new ResponseClass(new SearchResponse(true, 0, null), true);
+            return new ResponseComparator(new SearchResponse(true, 0, null), true);
         pageSet.clear();
         Map<Page, Float> relativeRelevance =
                 Relevance.getRelativeRelevance(pages, pageRepository, siteId, limit, indexesRepository);
         if (!relativeRelevance.isEmpty())
-            return new ResponseClass(setResponse(relativeRelevance
+            return new ResponseComparator(setResponse(relativeRelevance
                     , lemmasFromQuery, siteId, lemmas), true);
-        else return new ResponseClass(new FailResponse(false,
+        else return new ResponseComparator(new FailResponse(false,
                 "There are too much pages. " +
                         "Specify the limit value (no more than 50)"), false);
     }
@@ -289,7 +287,7 @@ public class SearchServiceImpl implements SearchService {
         Set<Snippet> snippetSet = new TreeSet<>();
         List<Snippet> uniqueSnippetList = new ArrayList<>();
         wordsOfElementContainedInQuery.keySet()
-                .forEach(k -> addSnippet(words, k, e, snippetSet));
+                .forEach(k -> addSnippetInSnippetSet(words, k, e, snippetSet));
         List<Snippet> snippetList = new ArrayList<>(snippetSet);
         for (int i = 0; i < (snippetList.size() < 2 ? snippetSet.size() : snippetList.size() - 1); i++) {
             if (i == 0) uniqueSnippetList.add(snippetList.get(i));
@@ -304,7 +302,7 @@ public class SearchServiceImpl implements SearchService {
         return new TreeSet<>(Snippet.getSnippetsWithInfrequentlyRepeatedWords(uniqueSnippetList, siteId, lemmas, numberOfPages));
     }
 
-    private void addSnippet(String[] words, Integer k, Element e, Set<Snippet> snippetSet) {
+    private void addSnippetInSnippetSet(String[] words, Integer k, Element e, Set<Snippet> snippetSet) {
         String snippet = "";
         if (words.length < 5) {
             for (int i = 0; i < words.length; i++) {
@@ -330,7 +328,7 @@ public class SearchServiceImpl implements SearchService {
 
 
     @RequiredArgsConstructor
-    private static class ResponseClass implements Comparable<ResponseClass> {
+    private static class ResponseComparator implements Comparable<ResponseComparator> {
         @Getter
         private final Response response;
         private final Boolean isContainsMatches;
@@ -340,7 +338,7 @@ public class SearchServiceImpl implements SearchService {
         }
 
         @Override
-        public int compareTo(ResponseClass o) {
+        public int compareTo(ResponseComparator o) {
             if (response.result && o.response.result) return 0;
             else if (response.result) return -1;
             else if (o.response.result) return 1;

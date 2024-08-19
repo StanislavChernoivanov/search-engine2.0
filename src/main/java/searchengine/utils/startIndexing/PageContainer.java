@@ -21,13 +21,13 @@ import java.util.stream.Collectors;
 @Scope("prototype")
 @NoArgsConstructor
 public class PageContainer {
-    private final Map<String, Page> PAGE_CONTAINER = new HashMap<>();
+    private final Map<String, Page> pageContainer = new HashMap<>();
     @Setter
     @Autowired
     private PageRepository pageRepository;
 
     public synchronized void clear() {
-        PAGE_CONTAINER.clear();
+        pageContainer.clear();
     }
 
     public synchronized void addPage(URL url, Document document, Site site) {
@@ -42,38 +42,38 @@ public class PageContainer {
                 page.setContent("");
                 page.setCode(404);
             }
-            PAGE_CONTAINER.put(url.getPath(), page);
+            pageContainer.put(url.getPath(), page);
             log.debug("add page - {}", url.getPath());
-            savePagesIfCountEnough();
+            savePagesIfMemoryIsFull();
         }
     }
 
-    private synchronized void savePagesIfCountEnough() {
-        if (PAGE_CONTAINER.values().stream().filter(Objects::nonNull).count() >= 30
+    private synchronized void savePagesIfMemoryIsFull() {
+        if (pageContainer.values().stream().filter(Objects::nonNull).count() >= 30
                 || Runtime.getRuntime().totalMemory() / Runtime.getRuntime().freeMemory() > 10) {
             savePages();
         }
     }
 
     public synchronized boolean isContainsPage(String path) {
-        return PAGE_CONTAINER.keySet().stream().anyMatch(key -> key.toLowerCase(Locale.ROOT).equals(path.toLowerCase(Locale.ROOT)));
+        return pageContainer.keySet().stream().anyMatch(key -> key.toLowerCase(Locale.ROOT).equals(path.toLowerCase(Locale.ROOT)));
     }
 
     public synchronized void savePages() {
-        Set<Page> pageSet = PAGE_CONTAINER.values().stream().filter(Objects::nonNull).collect(Collectors.toSet());
+        Set<Page> pageSet = pageContainer.values().stream().filter(Objects::nonNull).collect(Collectors.toSet());
         try {
             pageRepository.saveAll(pageSet);
-            PAGE_CONTAINER.replaceAll((a, b) -> null);
+            pageContainer.replaceAll((a, b) -> null);
         } catch (JpaSystemException ex) {
             pageSet.forEach(p -> {
                 try {
                     pageRepository.save(p);
-                    PAGE_CONTAINER.replace(p.getPath(), null);
+                    pageContainer.replace(p.getPath(), null);
                 } catch (JpaSystemException e) {
                     log.warn("{}\nPage (path - {}) is removed from buffer", "Packet for query is too large." +
                             " You can change this value on the server" +
                             " by setting the 'max_allowed_packet' variable.", p.getPath());
-                    PAGE_CONTAINER.remove(p.getPath());
+                    pageContainer.remove(p.getPath());
                 }
             });
         }

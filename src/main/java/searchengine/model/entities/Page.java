@@ -12,7 +12,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "pages", indexes = @javax.persistence.Index(name = "path_index", columnList = "path"),
-        uniqueConstraints = @UniqueConstraint(name = "page_site", columnNames = {"path", "site_id"}))
+        uniqueConstraints = @UniqueConstraint(name = "page_site_constraint", columnNames = {"path", "site_id"}))
 @Getter
 @Setter
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)

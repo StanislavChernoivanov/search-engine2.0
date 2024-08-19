@@ -12,7 +12,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "lemmas", uniqueConstraints =
-@UniqueConstraint(name = "l_index", columnNames = {"lemma", "site_id"}),
+@UniqueConstraint(name = "lemma_site_constraint", columnNames = {"lemma", "site_id"}),
         indexes = @javax.persistence.Index(name = "lemma_index", columnList = "lemma"))
 @Getter
 @Setter

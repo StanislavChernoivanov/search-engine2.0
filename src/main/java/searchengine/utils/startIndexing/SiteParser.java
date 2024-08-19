@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
+import searchengine.utils.ObjectFactoryHolder;
 
 import java.net.*;
 import java.util.ArrayList;
@@ -63,6 +64,34 @@ public class SiteParser extends RecursiveAction {
         this.referrer = referrer;
         this.pageContainer = pageContainer;
         this.objectFactoryHolder = objectFactoryHolder;
+    }
+
+    @Override
+    protected void compute() {
+        Set<String> childes = getChildes(url);
+        if (!childes.isEmpty()) {
+            try {
+                List<SiteParser> taskList = new ArrayList<>();
+                for (String child : childes) {
+                    SiteParser task = objectFactoryHolder.getSiteParser(
+                            new URI(child).toURL(),
+                            site,
+                            pageRepository,
+                            siteRepository,
+                            userAgent,
+                            referrer,
+                            pageContainer,
+                            objectFactoryHolder);
+                    task.fork();
+                    taskList.add(task);
+                }
+                taskList.forEach(ForkJoinTask::join);
+            } catch (CancellationException exception) {
+                log.debug("task - {} was cancelled", Thread.currentThread().getName());
+            } catch (Exception e) {
+                log.warn("{}\n{}\n{}", e.getClass().getSimpleName(), e.getMessage(), e.getStackTrace());
+            }
+        }
     }
 
     private Set<String> getChildes(URL parent) {
@@ -115,31 +144,4 @@ public class SiteParser extends RecursiveAction {
         return childes;
     }
 
-    @Override
-    protected void compute() {
-        Set<String> childes = getChildes(url);
-        if (!childes.isEmpty()) {
-            try {
-                List<SiteParser> taskList = new ArrayList<>();
-                for (String child : childes) {
-                    SiteParser task = objectFactoryHolder.getSiteParser(
-                            new URI(child).toURL(),
-                            site,
-                            pageRepository,
-                            siteRepository,
-                            userAgent,
-                            referrer,
-                            pageContainer,
-                            objectFactoryHolder);
-                    task.fork();
-                    taskList.add(task);
-                }
-                taskList.forEach(ForkJoinTask::join);
-            } catch (CancellationException exception) {
-                log.debug("task - {} was cancelled", Thread.currentThread().getName());
-            } catch (Exception e) {
-                log.warn("{}\n{}\n{}", e.getClass().getSimpleName(), e.getMessage(), e.getStackTrace());
-            }
-        }
-    }
 }

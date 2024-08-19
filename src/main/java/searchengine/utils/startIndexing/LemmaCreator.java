@@ -10,6 +10,7 @@ import searchengine.model.entities.Indexes;
 import searchengine.model.entities.Lemma;
 import searchengine.model.entities.Page;
 import searchengine.model.entities.Site;
+import searchengine.utils.LemmaCollector;
 
 import java.util.List;
 import java.util.Map;
@@ -18,20 +19,38 @@ import java.util.Optional;
 
 @Log4j2
 @RequiredArgsConstructor
-public class LemmaIndexer implements Runnable {
+public class LemmaCreator implements Runnable {
 
     @Getter
     private final Site site;
-    private final SaverOrRefresher saverOrRefresher;
+    private final LemmaHandler lemmaHandler;
     private final List<Page> pageList;
 
 
     public void run() {
         pageList.forEach(p -> {
             Map<String, Integer> lemmas = new LemmaCollector()
-                    .collectLemmas(clearTags(p.getContent()));
-            lemmas.keySet().forEach(k -> saveOrRefresh(k, lemmas.get(k), p));
+                    .collectLemmas(handleContent(p.getContent()));
+            lemmas.keySet().forEach(k -> saveOrUpdate(k, lemmas.get(k), p));
         });
+    }
+
+    public void saveOrUpdate
+            (String key, Integer rank, Page page) {
+        Lemma lemma = null;
+        Optional<Lemma> optionalLemma = lemmaHandler.checkBuffer(key);
+        if (optionalLemma.isPresent()) {
+            lemma = optionalLemma.get();
+            updateLemma(lemma, rank, page);
+        } else {
+            optionalLemma = lemmaHandler.getOptionalLemma(key, page.getSite().getId());
+            if (optionalLemma.isPresent()) {
+                lemma = optionalLemma.get();
+                updateLemma(lemma, rank, page);
+            }
+        }
+        if (lemma != null) return;
+        saveLemma(page, key, rank);
     }
 
     private void updateLemma(Lemma lemma, float rank, Page page) {
@@ -40,7 +59,7 @@ public class LemmaIndexer implements Runnable {
         index.setPage(page);
         index.setLemma(lemma);
         index.setRank(rank);
-        saverOrRefresher.saveData(lemma, index);
+        lemmaHandler.saveOrUpdateLemma(lemma, index);
     }
 
     private void saveLemma(Page page, String key, float rank) {
@@ -52,28 +71,10 @@ public class LemmaIndexer implements Runnable {
         index.setPage(page);
         index.setLemma(lemma);
         index.setRank(rank);
-        saverOrRefresher.saveData(lemma, index);
+        lemmaHandler.saveOrUpdateLemma(lemma, index);
     }
 
-    public void saveOrRefresh
-            (String key, Integer rank, Page page) {
-        Lemma lemma = null;
-        Optional<Lemma> optionalLemma = saverOrRefresher.checkBuffer(key);
-        if (optionalLemma.isPresent()) {
-            lemma = optionalLemma.get();
-            updateLemma(lemma, rank, page);
-        } else {
-            optionalLemma = saverOrRefresher.getOptionalLemma(key, page.getSite().getId());
-            if (optionalLemma.isPresent()) {
-                lemma = optionalLemma.get();
-                updateLemma(lemma, rank, page);
-            }
-        }
-        if (lemma != null) return;
-        saveLemma(page, key, rank);
-    }
-
-    public String clearTags(String content) {
+    public String handleContent(String content) {
         StringBuilder builder = new StringBuilder();
         Document doc = Jsoup.parse(content);
         Elements elements = doc.getAllElements();

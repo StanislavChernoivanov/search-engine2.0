@@ -1,4 +1,4 @@
-package searchengine.utils.startIndexing;
+package searchengine.utils;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectFactory;
@@ -7,6 +7,9 @@ import org.springframework.stereotype.Component;
 import searchengine.model.entities.Site;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
+import searchengine.utils.startIndexing.PageContainer;
+import searchengine.utils.startIndexing.SiteIndexer;
+import searchengine.utils.startIndexing.SiteParser;
 
 import java.net.URL;
 

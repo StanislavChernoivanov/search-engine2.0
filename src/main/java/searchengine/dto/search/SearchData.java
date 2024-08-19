@@ -14,6 +14,9 @@ public class SearchData implements Comparable<SearchData> {
 
     @Override
     public int compareTo(SearchData o) {
+        if(o.relevance.compareTo(relevance) == 0) {
+            return o.siteName.compareTo(this.siteName);
+        }
         return o.relevance.compareTo(relevance);
     }
 }

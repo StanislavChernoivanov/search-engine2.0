@@ -14,7 +14,7 @@ import java.util.Set;
 
 @Log4j2
 @Component
-public class SaverOrRefresher {
+public class LemmaHandler {
     private final Set<Lemma> lemmaBuffer;
     private final Set<Indexes> indexBuffer;
     @Getter
@@ -24,7 +24,7 @@ public class SaverOrRefresher {
 
     public boolean isInterrupted = false;
 
-    private SaverOrRefresher(LemmaRepository lemmaRepository, IndexesRepository indexesRepository) {
+    private LemmaHandler(LemmaRepository lemmaRepository, IndexesRepository indexesRepository) {
         this.lemmaRepository = lemmaRepository;
         this.indexesRepository = indexesRepository;
         lemmaBuffer = new HashSet<>();
@@ -55,7 +55,7 @@ public class SaverOrRefresher {
         }
     }
 
-    synchronized void saveData(Lemma lemma, Indexes index) {
+    synchronized void saveOrUpdateLemma(Lemma lemma, Indexes index) {
         lemmaBuffer.add(lemma);
         indexBuffer.add(index);
         save();

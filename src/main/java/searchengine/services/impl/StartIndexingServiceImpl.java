@@ -14,6 +14,7 @@ import searchengine.model.entities.Page;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
 import searchengine.services.StartIndexingService;
+import searchengine.utils.ObjectFactoryHolder;
 import searchengine.utils.startIndexing.*;
 
 import java.net.MalformedURLException;
@@ -36,7 +37,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
     private final PageRepository pageRepository;
     private final SitesList sites;
     private final Map<SiteIndexer, searchengine.model.entities.Site> indexingThreadMap = new HashMap<>();
-    private final SaverOrRefresher saverOrRefresher;
+    private final LemmaHandler lemmaHandler;
     @Value("${connection-properties.userAgent}")
     private String userAgent;
     @Value("${connection-properties.referrer}")
@@ -51,7 +52,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
                 LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd.MM.yyyy")));
         siteRepository.deleteAll();
         List<Site> siteList = sites.getSites();
-        saverOrRefresher.clearBuffers();
+        lemmaHandler.clearBuffers();
         siteList.forEach(this::startConcurrencyIndexing);
         Thread indexing = new Indexing();
         indexing.start();
@@ -91,7 +92,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
         }
     }
 
-    class Indexing extends Thread {
+    private class Indexing extends Thread {
         @Override
         public void run() {
             long time = System.currentTimeMillis();
@@ -118,7 +119,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
         }
 
         private void getFailedResponse(Map<SiteIndexer, searchengine.model.entities.Site> indexerSiteMap) {
-            saverOrRefresher.isInterrupted = false;
+            lemmaHandler.isInterrupted = false;
             indexerSiteMap.values().forEach(site -> {
                 site.setLastError("Indexing is Interrupted or stopped on purpose");
                 site.setStatusTime(LocalDateTime.now());
@@ -134,7 +135,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
             double timeStamp = System.currentTimeMillis();
             List<Thread> threadList = new ArrayList<>();
             actualSitesList.stream().filter(s -> s.getStatus().equals(EnumStatus.INDEXING))
-                    .forEach(s -> lemmanizationStart(s, threadList));
+                    .forEach(s -> startLemmaMaking(s, threadList));
             threadList.forEach(t -> {
                 try {
                     t.join();
@@ -142,7 +143,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
                     throw new RuntimeException(e);
                 }
             });
-            if (saverOrRefresher.isInterrupted) {
+            if (lemmaHandler.isInterrupted) {
                 getFailedResponse(indexingThreadMap);
             } else {
                 log.info("{} {}(for {})", "Indexing is over successfully at",
@@ -159,7 +160,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
         }
     }
 
-    private void lemmanizationStart(searchengine.model.entities.Site site, List<Thread> threadList) {
+    private void startLemmaMaking(searchengine.model.entities.Site site, List<Thread> threadList) {
         Thread newThread = new Thread(() -> {
             int countPages = pageRepository.findCountPagesBySiteId(site.getId());
             int pageNumber = 0;
@@ -167,8 +168,8 @@ public class StartIndexingServiceImpl implements StartIndexingService {
                 while (countPages > 0) {
                     List<Page> pageList
                             = pageRepository.findPageBySiteId(site.getId(), PageRequest.of(pageNumber, 50)).toList();
-                    Thread thread = new Thread(new LemmaIndexer
-                            (site, saverOrRefresher, pageList));
+                    Thread thread = new Thread(new LemmaCreator
+                            (site, lemmaHandler, pageList));
                     thread.start();
                     thread.join();
                     countPages = countPages > 50 ? countPages - 50 : 0;
@@ -191,7 +192,7 @@ public class StartIndexingServiceImpl implements StartIndexingService {
             indexingThreadMap.keySet().forEach(t -> t.getPool().shutdownNow());
             indexingThreadMap.keySet().forEach(Thread::interrupt);
         } else {
-            saverOrRefresher.isInterrupted = true;
+            lemmaHandler.isInterrupted = true;
         }
         return new Response(true);
     }

@@ -1,0 +1,35 @@
+indexing-settings:
+  sites:
+    - url: ${URL_SITE_1:https://www.svetlovka.ru/}
+      name: ${NAME_SITE_2:Svetlovka}
+    - url: ${URL_SITE_2:https://playback.ru/}
+      name: ${NAME_SITE_2:PlayBack}
+    - url: ${URL_SITE_3:https://samara.lada.ru/}
+      name: ${NAME_SITE_3:SamaraLada}
+
+
+spring:
+  datasource:
+    username: ${DATASOURCE_USERNAME:root}
+    password: ${DATASOURCE_PASSWORD:2664153Hgt!}
+    url:
+      ${DATASOURCE_URL:jdbc:mysql://localhost:3306/search_engine?useSSL=false&requireSL=false&allowPublicKeyRetrieval=true}
+  jpa:
+    properties:
+      hibernate:
+        dialect: ${HIBERNATE_DIALECT:org.hibernate.dialect.MariaDBDialect}
+    hibernate:
+      ddl-auto: create
+    show-sql: false
+
+
+connection-properties:
+  userAgent: Mozilla/5.0 (Windows; U; WindowsNT 5.1; en-US; rv1.8.1.6) Gecko/20070725 Firefox/2.0.0.6
+  referrer: http://www.google.com
+
+logging:
+  level:
+    ROOT: INFO
+
+server:
+  port: ${SERVER_PORT:8080}

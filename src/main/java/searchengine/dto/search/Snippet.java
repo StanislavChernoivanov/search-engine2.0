@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import searchengine.model.entities.Lemma;
-import searchengine.utils.startIndexing.LemmaCollector;
+import searchengine.utils.LemmaCollector;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;

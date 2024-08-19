@@ -18,8 +18,8 @@ import searchengine.model.repositories.LemmaRepository;
 import searchengine.model.repositories.PageRepository;
 import searchengine.model.repositories.SiteRepository;
 import searchengine.services.IndexPageService;
-import searchengine.utils.startIndexing.LemmaIndexer;
-import searchengine.utils.startIndexing.SaverOrRefresher;
+import searchengine.utils.startIndexing.LemmaCreator;
+import searchengine.utils.startIndexing.LemmaHandler;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -42,7 +42,7 @@ public class IndexPageServiceImpl implements IndexPageService {
     private Document doc;
     private Connection connection;
     private final SitesList sites;
-    private final SaverOrRefresher saverOrRefresher;
+    private final LemmaHandler lemmaHandler;
 
 
     @Override
@@ -82,7 +82,7 @@ public class IndexPageServiceImpl implements IndexPageService {
                 siteModel.setName(isSiteExist.get().getName());
                 siteRepository.save(siteModel);
             } else siteModel = optionalSite.get();
-            if (indexPage(url, siteModel)) {
+            if (indexPageIFPageIsAvailable(url, siteModel)) {
                 return new FailResponse(false, "Отсутствует соединение с данной страницей");
             }
             return response;
@@ -100,7 +100,7 @@ public class IndexPageServiceImpl implements IndexPageService {
         optLemmaList.clear();
         pageRepository.delete(outdatedPage);
         indexList.clear();
-        if (indexPage(url, site))
+        if (indexPageIFPageIsAvailable(url, site))
             return new FailResponse(false, "Отсутствует соединение с данной страницей");
         return response;
     }
@@ -123,7 +123,7 @@ public class IndexPageServiceImpl implements IndexPageService {
         lemmaRepository.saveAll(lemmasForEditing);
     }
 
-    private boolean indexPage(URL url, Site site) throws InterruptedException {
+    private boolean indexPageIFPageIsAvailable(URL url, Site site) throws InterruptedException {
         if (isAvailableWebPage(url)) {
             Page newPage = new Page();
             newPage.setPath(url.getPath());
@@ -131,12 +131,12 @@ public class IndexPageServiceImpl implements IndexPageService {
             newPage.setContent(doc.html());
             newPage.setSite(site);
             pageRepository.save(newPage);
-            LemmaIndexer lemmaIndexer =
-                    new LemmaIndexer(site, saverOrRefresher, List.of(newPage));
-            Thread thread = new Thread(lemmaIndexer);
+            LemmaCreator lemmaCreator =
+                    new LemmaCreator(site, lemmaHandler, List.of(newPage));
+            Thread thread = new Thread(lemmaCreator);
             thread.start();
             thread.join();
-            saverOrRefresher.saveRemainedLemmasInDB();
+            lemmaHandler.saveRemainedLemmasInDB();
             return false;
         } else {
             Page newPage = new Page();
